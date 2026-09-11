@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Local sensitive runtime data
+data/auth.json
+data/workspaces.json
+data/uploads/*
+!data/uploads/.gitkeep
+data/agyweb-uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment and OS files
+.env
+.env.local
+.DS_Store
+Thumbs.db

@@ -1,0 +1,9 @@
+[
+  {
+    "id": "my-project",
+    "name": "My Project",
+    "path": "/path/to/your/project",
+    "description": "Default workspace",
+    "added_at": "2026-09-11T00:00:00Z"
+  }
+]

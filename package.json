@@ -1,0 +1,16 @@
+{
+  "name": "antigravity-web-ui",
+  "version": "1.0.0",
+  "description": "Web UI for Antigravity AI Coding Agent with Multi-Workspace Management and Streaming Chat",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop agy-web-ui",
+    "pm2:restart": "pm2 restart agy-web-ui",
+    "pm2:logs": "pm2 logs agy-web-ui"
+  },
+  "keywords": ["antigravity", "agent", "web-ui", "lan", "workspace"],
+  "author": "Antigravity Team",
+  "license": "MIT"
+}

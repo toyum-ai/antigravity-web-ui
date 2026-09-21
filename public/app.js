@@ -2911,7 +2911,7 @@ function createAssistantMessageContainer(targetContainer = null) {
   const row = document.createElement('div');
   row.className = 'message-row assistant';
 
-  row.innerHTML = `<div class="message-avatar">AI</div><div class="message-content"><div class="message-author">Antigravity Agent</div><div class="message-body markdown-body"><div class="response-text"></div></div></div>`;
+  row.innerHTML = `<div class="message-header"><div class="message-avatar">AI</div><span class="message-author">Antigravity Agent</span></div><div class="message-content"><div class="message-body markdown-body"><div class="response-text"></div></div></div>`;
 
   container.appendChild(row);
   const textEl = row.querySelector('.response-text');
@@ -3036,10 +3036,12 @@ function appendMessage(role, content, extra = {}, targetContainer = null) {
   const row = document.createElement('div');
   row.className = `message-row ${role}`;
 
-  const avatar = role === 'user' ? 'U' : 'AI';
-  const author = role === 'user' ? '你' : 'Antigravity Agent';
-
-  let innerHtml = `<div class="message-avatar">${avatar}</div><div class="message-content"><div class="message-author">${author}</div><div class="message-body ${role === 'assistant' ? 'markdown-body' : ''}">`;
+  let innerHtml = '';
+  if (role === 'assistant') {
+    innerHtml += `<div class="message-header"><div class="message-avatar">AI</div><span class="message-author">Antigravity Agent</span></div><div class="message-content"><div class="message-body markdown-body">`;
+  } else {
+    innerHtml += `<div class="message-content"><div class="message-body">`;
+  }
 
   // Assistant thinking block if present
   if (extra.thinking) {

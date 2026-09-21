@@ -672,13 +672,25 @@ function setupEventListeners() {
     });
   }
 
-  // Send message
-  el.sendBtn.addEventListener('click', sendMessage);
+  // Send message or Stop task
+  el.sendBtn.addEventListener('click', () => {
+    const currentId = state.currentConversationId;
+    const isRunning = currentId && state.runningSessionIds.has(currentId);
+    if (isRunning) {
+      stopAgentExecution();
+    } else {
+      sendMessage();
+    }
+  });
   el.promptInput.addEventListener('keydown', (e) => {
     // Check !e.isComposing to avoid prematurely sending while typing Chinese/IME candidates
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
-      sendMessage();
+      const currentId = state.currentConversationId;
+      const isRunning = currentId && state.runningSessionIds.has(currentId);
+      if (!isRunning) {
+        sendMessage();
+      }
     }
   });
 
@@ -2802,6 +2814,7 @@ function handleStreamEventForSession(session, event, data) {
     }
   } else if (event === 'status') {
     session.statusText = `正在启动模型 ${data.model}...`;
+    updateSessionBadge(session, session.statusText);
     if (state.currentConversationId === session.sessionId) {
       updateStatus(session.statusText);
     }
@@ -2903,13 +2916,26 @@ async function stopAgentExecution() {
   if (!currentId || !state.runningSessionIds.has(currentId)) return;
 
   try {
-    updateStatus('正在中断智能体执行...');
-    
     const active = state.activeSessions.get(currentId);
     if (active) {
       active.isUserAborted = true;
       if (active.abortController) {
         active.abortController.abort();
+      }
+      if (active.currentStreamMessage?.statusBadgeEl) {
+        active.currentStreamMessage.statusBadgeEl.remove();
+        active.currentStreamMessage.statusBadgeEl = null;
+      }
+      if (active.currentStreamMessage?.thinkingEl && typeof active.currentStreamMessage.thinkingEl.finalize === 'function') {
+        active.currentStreamMessage.thinkingEl.finalize();
+      }
+      if (active.currentStreamMessage && active.currentStreamMessage.bodyEl) {
+        const stopNotice = document.createElement('div');
+        stopNotice.className = 'tool-badge warning';
+        stopNotice.style.marginTop = '8px';
+        stopNotice.style.display = 'inline-flex';
+        stopNotice.textContent = '⏹ 用户已终止任务';
+        active.currentStreamMessage.bodyEl.appendChild(stopNotice);
       }
     }
 
@@ -3143,24 +3169,33 @@ function removeTypingCursor(scope = document) {
   (scope || document).querySelectorAll('.typing-cursor').forEach(c => c.remove());
 }
 
+const SEND_ICON_HTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`;
+const STOP_ICON_HTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="5.5" y="5.5" width="13" height="13" rx="2.5"/></svg>`;
+
 function updateGeneratingUI() {
   const currentId = state.currentConversationId;
   const isRunning = currentId && state.runningSessionIds.has(currentId);
   state.isGenerating = !!isRunning;
 
-  // 仅在当前查看的会话处于运行中时，才禁用发送按钮
-  el.sendBtn.disabled = !!isRunning;
+  // 底部提示条不显示，避免与消息流内的状态提示重复
+  if (el.agentStatusBar) {
+    el.agentStatusBar.classList.add('hidden');
+  }
 
   if (isRunning) {
-    el.agentStatusBar.classList.remove('hidden');
-    const activeSession = state.activeSessions.get(currentId);
-    if (activeSession && activeSession.statusText) {
-      updateStatus(activeSession.statusText);
-    } else {
-      updateStatus('智能体正在执行任务中...');
-    }
+    // 运行中：发送按钮变红，点击终止任务
+    el.sendBtn.disabled = false;
+    el.sendBtn.classList.add('is-stop');
+    el.sendBtn.title = '终止任务';
+    el.sendBtn.setAttribute('aria-label', '终止任务');
+    el.sendBtn.innerHTML = STOP_ICON_HTML;
   } else {
-    el.agentStatusBar.classList.add('hidden');
+    // 空闲：发送按钮恢复正常蓝色
+    el.sendBtn.classList.remove('is-stop');
+    el.sendBtn.title = '发送 (Enter)';
+    el.sendBtn.setAttribute('aria-label', '发送 (Enter)');
+    el.sendBtn.disabled = false;
+    el.sendBtn.innerHTML = SEND_ICON_HTML;
     removeTypingCursor();
   }
 }
@@ -3177,7 +3212,9 @@ function setGenerating(generating) {
 }
 
 function updateStatus(msg) {
-  el.statusMessage.textContent = msg;
+  if (el.statusMessage) {
+    el.statusMessage.textContent = msg;
+  }
 }
 
 function scrollToBottom() {

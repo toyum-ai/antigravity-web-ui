@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Antigravity">
   <link rel="apple-touch-icon" href="/apple_touch_icon.png">
-  <link rel="stylesheet" href="/app.css?v=2.9">
+  <link rel="stylesheet" href="/app.css?v=3.0">
 </head>
 <body>
   <div class="app-layout">
@@ -243,8 +243,8 @@
         </button>
 
         <div class="input-card">
-          <!-- Status Banner (shown when agent is busy) -->
-          <div class="agent-status-banner hidden" id="agentStatusBar">
+          <!-- Status Banner (hidden to prevent duplicate status with chat list) -->
+          <div class="agent-status-banner hidden" id="agentStatusBar" style="display: none !important;">
             <div class="status-left">
               <span class="spinner-inline"></span>
               <span class="status-msg" id="statusMessage">智能体正在分析处理中...</span>
@@ -779,7 +779,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <script src="/vendor/marked.min.js"></script>
-  <script src="/app.js?v=2.9"></script>
+  <script src="/app.js?v=3.0"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

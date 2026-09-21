@@ -68,17 +68,31 @@ const state = {
   activeModel: 'gemini-3.8-flash-high',
   activeMode: 'accept-edits',
   activeEffort: 'high',
+  modelFamilies: [],
+  hoveredFamilyId: null,
   theme: 'dark',
-  attachedImages: []            // { tempId, filename, url, server_path }
+  attachedImages: [],           // { tempId, filename, url, server_path }
+  historyViewMode: localStorage.getItem('agy_history_view_mode') || 'all', // 'all' (按工作区分组) 或 'current' (仅当前工作区)
+  collapsedWsGroups: new Set(JSON.parse(localStorage.getItem('agy_collapsed_ws_groups') || '[]')),
+  expandedWsGroups: new Set(JSON.parse(localStorage.getItem('agy_expanded_ws_groups') || '[]')),
+  workspaceToRename: null,
+  accounts: [],
+  activeAccountEmail: '',
+  accountSearchTerm: '',
+  accountFilter: 'all',
+  bestAccountInfo: null,
+  isSwitchingAccount: false
 };
 
 // DOM Elements
 const el = {
   sidebar: document.getElementById('sidebar'),
+  sidebarBackdrop: document.getElementById('sidebarBackdrop'),
   sidebarCollapseBtn: document.getElementById('sidebarCollapseBtn'),
   sidebarExpandBtn: document.getElementById('sidebarExpandBtn'),
   currentWsName: document.getElementById('currentWsName'),
   currentWsPath: document.getElementById('currentWsPath'),
+  renameCurrentWsBtn: document.getElementById('renameCurrentWsBtn'),
   workspaceCard: document.getElementById('workspaceCard'),
   workspaceDropdown: document.getElementById('workspaceDropdown'),
   workspaceList: document.getElementById('workspaceList'),
@@ -88,6 +102,21 @@ const el = {
   newChatBtn: document.getElementById('newChatBtn'),
   historyList: document.getElementById('historyList'),
   refreshHistoryBtn: document.getElementById('refreshHistoryBtn'),
+  historyTabAll: document.getElementById('historyTabAll'),
+  historyTabCurrent: document.getElementById('historyTabCurrent'),
+  modelCascaderContainer: document.getElementById('modelCascaderContainer'),
+  modelCascaderTrigger: document.getElementById('modelCascaderTrigger'),
+  modelTriggerName: document.getElementById('modelTriggerName'),
+  modelTriggerEffort: document.getElementById('modelTriggerEffort'),
+  modelTriggerMode: document.getElementById('modelTriggerMode'),
+  modelCascaderPopover: document.getElementById('modelCascaderPopover'),
+  modelCascaderBackdrop: document.getElementById('modelCascaderBackdrop'),
+  modelSheetCloseBtn: document.getElementById('modelSheetCloseBtn'),
+  modeCardAccept: document.getElementById('modeCardAccept'),
+  modeCardPlan: document.getElementById('modeCardPlan'),
+  modelFamiliesList: document.getElementById('modelFamiliesList'),
+  modelEffortsHeader: document.getElementById('modelEffortsHeader'),
+  modelEffortsList: document.getElementById('modelEffortsList'),
   modelSelect: document.getElementById('modelSelect'),
   modeSelect: document.getElementById('modeSelect'),
   effortSelect: document.getElementById('effortSelect'),
@@ -102,10 +131,13 @@ const el = {
   themeIconSun: document.getElementById('themeIconSun'),
   themeIconMoon: document.getElementById('themeIconMoon'),
   themeNameText: document.getElementById('themeNameText'),
+  navbarWsPill: document.getElementById('navbarWsPill'),
+  navbarBreadcrumbs: document.getElementById('navbarBreadcrumbs') || document.querySelector('.navbar-breadcrumbs'),
   navWsPath: document.getElementById('navWsPath'),
   sessionTitle: document.getElementById('sessionTitle'),
   chatContainer: document.getElementById('chatContainer'),
   welcomeView: document.getElementById('welcomeView'),
+  welcomeWsBadge: document.getElementById('welcomeWsBadge'),
   welcomeWsPath: document.getElementById('welcomeWsPath'),
   messagesList: document.getElementById('messagesList'),
   scrollBottomBtn: document.getElementById('scrollBottomBtn'),
@@ -126,15 +158,100 @@ const el = {
   cancelAddWsModal: document.getElementById('cancelAddWsModal'),
   wsInputName: document.getElementById('wsInputName'),
   wsInputPath: document.getElementById('wsInputPath'),
+  browseDirBtn: document.getElementById('browseDirBtn'),
   validatePathBtn: document.getElementById('validatePathBtn'),
   wsValidationFeedback: document.getElementById('wsValidationFeedback'),
   saveWorkspaceBtn: document.getElementById('saveWorkspaceBtn'),
+  // Modal: Server Directory Picker
+  dirPickerModal: document.getElementById('dirPickerModal'),
+  closeDirPickerModal: document.getElementById('closeDirPickerModal'),
+  cancelDirPickerModal: document.getElementById('cancelDirPickerModal'),
+  confirmDirPickerBtn: document.getElementById('confirmDirPickerBtn'),
+  dirNavUpBtn: document.getElementById('dirNavUpBtn'),
+  dirRefreshBtn: document.getElementById('dirRefreshBtn'),
+  dirBreadcrumb: document.getElementById('dirBreadcrumb'),
+  dirFilterInput: document.getElementById('dirFilterInput'),
+  dirListContainer: document.getElementById('dirListContainer'),
+  dirSelectedPathPreview: document.getElementById('dirSelectedPathPreview'),
+  // Modal: Rename Workspace
+  renameWorkspaceModal: document.getElementById('renameWorkspaceModal'),
+  closeRenameWsModal: document.getElementById('closeRenameWsModal'),
+  cancelRenameWsModal: document.getElementById('cancelRenameWsModal'),
+  renameWsPathPreview: document.getElementById('renameWsPathPreview'),
+  renameWsInputName: document.getElementById('renameWsInputName'),
+  submitRenameWsBtn: document.getElementById('submitRenameWsBtn'),
   // Modal: Auth
   authModal: document.getElementById('authModal'),
   accessKeyInput: document.getElementById('accessKeyInput'),
   toggleKeyVisibilityBtn: document.getElementById('toggleKeyVisibilityBtn'),
   submitAuthKeyBtn: document.getElementById('submitAuthKeyBtn'),
-  authFeedback: document.getElementById('authFeedback')
+  authFeedback: document.getElementById('authFeedback'),
+  // Modal & Badges: Google Accounts & Quota Switcher
+  accountManagerBtn: document.getElementById('accountManagerBtn'),
+  navAccountEmail: document.getElementById('navAccountEmail'),
+  navAccountQuota: document.getElementById('navAccountQuota'),
+  navQuickSwitchBestBtn: document.getElementById('navQuickSwitchBestBtn'),
+  composerAccountPill: document.getElementById('composerAccountPill'),
+  composerAccountEmail: document.getElementById('composerAccountEmail'),
+  composerAccountQuota: document.getElementById('composerAccountQuota'),
+  composerQuickBestBtn: document.getElementById('composerQuickBestBtn'),
+  sidebarAccountCard: document.getElementById('sidebarAccountCard'),
+  sidebarAccountEmail: document.getElementById('sidebarAccountEmail'),
+  sidebarSwitchAccountBtn: document.getElementById('sidebarSwitchAccountBtn'),
+  accountModal: document.getElementById('accountModal'),
+  closeAccountModalBtn: document.getElementById('closeAccountModalBtn'),
+  closeAccountModalFooterBtn: document.getElementById('closeAccountModalFooterBtn'),
+  accountPoolTotalBadge: document.getElementById('accountPoolTotalBadge'),
+  accountSearchInput: document.getElementById('accountSearchInput'),
+  accountSearchClearBtn: document.getElementById('accountSearchClearBtn'),
+  accountFilterChips: document.getElementById('accountFilterChips'),
+  chipCountAll: document.getElementById('chipCountAll'),
+  chipCountNormal: document.getElementById('chipCountNormal'),
+  chipCountHigh: document.getElementById('chipCountHigh'),
+  chipCountPro: document.getElementById('chipCountPro'),
+  chipCountLow: document.getElementById('chipCountLow'),
+  switchBestAccountBtn: document.getElementById('switchBestAccountBtn'),
+  bestQuotaPreviewTag: document.getElementById('bestQuotaPreviewTag'),
+  refreshQuotasBtn: document.getElementById('refreshQuotasBtn'),
+  currentAccountBanner: document.getElementById('currentAccountBanner'),
+  currentAccountBannerEmail: document.getElementById('currentAccountBannerEmail'),
+  currentAccountBannerTier: document.getElementById('currentAccountBannerTier'),
+  currentAccountBannerQuotas: document.getElementById('currentAccountBannerQuotas'),
+  accountListContainer: document.getElementById('accountListContainer'),
+  openManagerLink: document.getElementById('openManagerLink'),
+  toastContainer: document.getElementById('toastContainer'),
+  // Mobile Top Navbar & New Chat Buttons
+  mobileNavModelBtn: document.getElementById('mobileNavModelBtn'),
+  mobileNavModelName: document.getElementById('mobileNavModelName'),
+  mobileNavModelEffort: document.getElementById('mobileNavModelEffort'),
+  mobileNewChatBtn: document.getElementById('mobileNewChatBtn'),
+  desktopNewChatBtn: document.getElementById('desktopNewChatBtn'),
+  composerModeToggleBtn: document.getElementById('composerModeToggleBtn'),
+  composerModeText: document.getElementById('composerModeText'),
+  // Modal: Unified Settings
+  settingsBtn: document.getElementById('settingsBtn'),
+  settingsModal: document.getElementById('settingsModal'),
+  closeSettingsModalBtn: document.getElementById('closeSettingsModalBtn'),
+  closeSettingsModalFooterBtn: document.getElementById('closeSettingsModalFooterBtn'),
+  settingsAccountEmail: document.getElementById('settingsAccountEmail'),
+  settingsAccountTier: document.getElementById('settingsAccountTier'),
+  settingsQuickBestBtn: document.getElementById('settingsQuickBestBtn'),
+  settingsOpenAccountPoolBtn: document.getElementById('settingsOpenAccountPoolBtn'),
+  settingsRefreshQuotasBtn: document.getElementById('settingsRefreshQuotasBtn'),
+  settingsQuotasBars: document.getElementById('settingsQuotasBars'),
+  settingsModeAccept: document.getElementById('settingsModeAccept'),
+  settingsModePlan: document.getElementById('settingsModePlan'),
+  settingsModelSummary: document.getElementById('settingsModelSummary'),
+  settingsOpenModelPickerBtn: document.getElementById('settingsOpenModelPickerBtn'),
+  settingsWsName: document.getElementById('settingsWsName'),
+  settingsWsPath: document.getElementById('settingsWsPath'),
+  settingsSwitchWsBtn: document.getElementById('settingsSwitchWsBtn'),
+  settingsAddWsBtn: document.getElementById('settingsAddWsBtn'),
+  settingsThemeDark: document.getElementById('settingsThemeDark'),
+  settingsThemeLight: document.getElementById('settingsThemeLight'),
+  settingsLanUrl: document.getElementById('settingsLanUrl'),
+  settingsCopyLanBtn: document.getElementById('settingsCopyLanBtn'),
+  settingsLockBtn: document.getElementById('settingsLockBtn')
 };
 
 // --- Authentication Helper Functions ---
@@ -284,6 +401,8 @@ async function init() {
 
   setupEventListeners();
   setupAuthHandlers();
+  updateNavbarSessionTitle('新会话');
+  updateModelTriggerDisplay();
 
   // Check Auth Status First
   const authOk = await checkAuthStatus();
@@ -295,6 +414,7 @@ async function init() {
   await loadSystemInfo();
   await loadWorkspaces();
   await loadConversations();
+  await loadAccounts(true);
   
   // Auto select default workspace
   const savedWsPath = localStorage.getItem('agy_last_ws');
@@ -310,13 +430,74 @@ async function init() {
   setInterval(() => {
     loadConversations(true);
   }, 4000);
+
+  // 定时每 45 秒静默同步账号池及额度信息
+  setInterval(() => {
+    loadAccounts(true);
+  }, 45000);
+}
+
+// --- Sidebar Drawer Manager (Desktop & Mobile) ---
+function openSidebar() {
+  if (window.innerWidth <= 768) {
+    el.sidebar.classList.add('mobile-open');
+    if (el.sidebarBackdrop) el.sidebarBackdrop.classList.remove('hidden');
+    document.body.classList.add('sidebar-drawer-open');
+  } else {
+    el.sidebar.classList.remove('collapsed');
+  }
+}
+
+function closeSidebar() {
+  if (window.innerWidth <= 768) {
+    el.sidebar.classList.remove('mobile-open');
+    if (el.sidebarBackdrop) el.sidebarBackdrop.classList.add('hidden');
+    document.body.classList.remove('sidebar-drawer-open');
+  } else {
+    el.sidebar.classList.add('collapsed');
+  }
+}
+
+function toggleSidebar() {
+  if (window.innerWidth <= 768) {
+    if (el.sidebar.classList.contains('mobile-open')) {
+      closeSidebar();
+    } else {
+      openSidebar();
+    }
+  } else {
+    el.sidebar.classList.toggle('collapsed');
+  }
 }
 
 // --- Event Listeners ---
 function setupEventListeners() {
-  // Sidebar Toggle
-  el.sidebarCollapseBtn.addEventListener('click', () => el.sidebar.classList.add('collapsed'));
-  el.sidebarExpandBtn.addEventListener('click', () => el.sidebar.classList.toggle('collapsed'));
+  // Sidebar Toggle (Desktop & Mobile Drawer)
+  el.sidebarCollapseBtn.addEventListener('click', closeSidebar);
+  el.sidebarExpandBtn.addEventListener('click', toggleSidebar);
+  if (el.sidebarBackdrop) {
+    el.sidebarBackdrop.addEventListener('click', closeSidebar);
+  }
+
+  // Mobile touch swipe-to-close on sidebar
+  let touchStartX = 0;
+  let touchStartY = 0;
+  if (el.sidebar) {
+    el.sidebar.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].clientX;
+      touchStartY = e.changedTouches[0].clientY;
+    }, { passive: true });
+    el.sidebar.addEventListener('touchend', (e) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      const dx = touchStartX - touchEndX;
+      const dy = Math.abs(touchStartY - touchEndY);
+      // If swiped left by more than 40px and mostly horizontal
+      if (dx > 40 && dy < dx && window.innerWidth <= 768) {
+        closeSidebar();
+      }
+    }, { passive: true });
+  }
 
   // Workspace dropdown toggle
   el.workspaceCard.addEventListener('click', (e) => {
@@ -324,8 +505,29 @@ function setupEventListeners() {
     el.workspaceDropdown.classList.toggle('hidden');
   });
 
+  // Click on Navbar Workspace Pill toggles workspace dropdown directly
+  if (el.navbarWsPill) {
+    el.navbarWsPill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (window.innerWidth <= 768) {
+        openSidebar();
+        el.workspaceDropdown.classList.remove('hidden');
+      } else {
+        if (el.sidebar && el.sidebar.classList.contains('collapsed')) {
+          el.sidebar.classList.remove('collapsed');
+        }
+        el.workspaceDropdown.classList.toggle('hidden');
+      }
+    });
+  }
+
   document.addEventListener('click', (e) => {
-    if (!el.workspaceCard.contains(e.target) && !el.workspaceDropdown.contains(e.target)) {
+    if (
+      !el.workspaceCard.contains(e.target) &&
+      !el.workspaceDropdown.contains(e.target) &&
+      !(el.navbarWsPill && el.navbarWsPill.contains(e.target)) &&
+      !e.target.closest('#welcomeWsBadge')
+    ) {
       el.workspaceDropdown.classList.add('hidden');
     }
   });
@@ -338,6 +540,63 @@ function setupEventListeners() {
   el.manageWsBtn.addEventListener('click', openWorkspaceModal);
   el.closeAddWsModal.addEventListener('click', closeWorkspaceModal);
   el.cancelAddWsModal.addEventListener('click', closeWorkspaceModal);
+
+  // Rename Workspace events
+  if (el.renameCurrentWsBtn) {
+    el.renameCurrentWsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.currentWorkspace) openRenameWorkspaceModal(state.currentWorkspace);
+    });
+  }
+  if (el.closeRenameWsModal) el.closeRenameWsModal.addEventListener('click', closeRenameWorkspaceModal);
+  if (el.cancelRenameWsModal) el.cancelRenameWsModal.addEventListener('click', closeRenameWorkspaceModal);
+  if (el.submitRenameWsBtn) el.submitRenameWsBtn.addEventListener('click', saveWorkspaceRename);
+  if (el.renameWsInputName) {
+    el.renameWsInputName.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') saveWorkspaceRename();
+      if (e.key === 'Escape') closeRenameWorkspaceModal();
+    });
+  }
+
+  // Browse Directory button
+  if (el.browseDirBtn) {
+    el.browseDirBtn.addEventListener('click', () => {
+      openDirPickerModal(el.wsInputPath.value.trim());
+    });
+  }
+
+  // Dir Picker Modal Events
+  if (el.closeDirPickerModal) el.closeDirPickerModal.addEventListener('click', closeDirPickerModal);
+  if (el.cancelDirPickerModal) el.cancelDirPickerModal.addEventListener('click', closeDirPickerModal);
+  if (el.confirmDirPickerBtn) el.confirmDirPickerBtn.addEventListener('click', confirmDirPickerSelection);
+  if (el.dirNavUpBtn) {
+    el.dirNavUpBtn.addEventListener('click', () => {
+      if (dirPickerParentDir) loadServerDirectories(dirPickerParentDir);
+    });
+  }
+  if (el.dirRefreshBtn) {
+    el.dirRefreshBtn.addEventListener('click', () => {
+      if (dirPickerCurrentDir) loadServerDirectories(dirPickerCurrentDir);
+    });
+  }
+  if (el.dirFilterInput) {
+    el.dirFilterInput.addEventListener('input', renderDirList);
+  }
+  document.querySelectorAll('.dir-quick-bar .btn-tag').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.dir) loadServerDirectories(btn.dataset.dir);
+    });
+  });
+  if (el.dirPickerModal) {
+    el.dirPickerModal.addEventListener('click', (e) => {
+      if (e.target === el.dirPickerModal) closeDirPickerModal();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && el.dirPickerModal && !el.dirPickerModal.classList.contains('hidden')) {
+      closeDirPickerModal();
+    }
+  });
 
   // Validate path button
   el.validatePathBtn.addEventListener('click', validateWorkspacePathInput);
@@ -360,26 +619,88 @@ function setupEventListeners() {
   el.newChatBtn.addEventListener('click', startNewChat);
 
   // Refresh History
-  el.refreshHistoryBtn.addEventListener('click', loadConversations);
+  el.refreshHistoryBtn.addEventListener('click', () => loadConversations());
 
-  // Quick prompt cards
-  document.querySelectorAll('.quick-prompt-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const prompt = card.dataset.prompt;
-      if (prompt) {
-        el.promptInput.value = prompt;
-        sendMessage();
+  // History View Tabs (全部分类 / 当前工作区)
+  if (el.historyTabAll) {
+    el.historyTabAll.addEventListener('click', () => setHistoryViewMode('all'));
+  }
+  if (el.historyTabCurrent) {
+    el.historyTabCurrent.addEventListener('click', () => setHistoryViewMode('current'));
+  }
+
+  // Welcome Starter Cards & Quick Chips handling
+  const welcomeViewEl = document.getElementById('welcomeView');
+  if (welcomeViewEl) {
+    welcomeViewEl.addEventListener('click', (e) => {
+      const card = e.target.closest('.starter-card');
+      if (card && card.dataset.prompt) {
+        el.promptInput.value = card.dataset.prompt;
+        el.promptInput.style.height = 'auto';
+        el.promptInput.style.height = Math.min(el.promptInput.scrollHeight, 180) + 'px';
+        el.promptInput.focus();
+        return;
+      }
+      const chip = e.target.closest('.quick-chip-btn');
+      if (chip) {
+        if (chip.dataset.prefix) {
+          if (chip.dataset.prefix.includes('/plan')) {
+            setExecutionMode('plan');
+          }
+          el.promptInput.value = chip.dataset.prefix;
+        } else if (chip.dataset.prompt) {
+          el.promptInput.value = chip.dataset.prompt;
+        }
+        el.promptInput.style.height = 'auto';
+        el.promptInput.style.height = Math.min(el.promptInput.scrollHeight, 180) + 'px';
+        el.promptInput.focus();
+        return;
+      }
+      const wsBadge = e.target.closest('#welcomeWsBadge');
+      if (wsBadge) {
+        if (window.innerWidth <= 768) {
+          openSidebar();
+          el.workspaceDropdown.classList.remove('hidden');
+        } else {
+          if (el.sidebar && el.sidebar.classList.contains('collapsed')) {
+            el.sidebar.classList.remove('collapsed');
+          }
+          el.workspaceDropdown.classList.toggle('hidden');
+        }
+        return;
       }
     });
-  });
+  }
 
   // Send message
   el.sendBtn.addEventListener('click', sendMessage);
   el.promptInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Check !e.isComposing to avoid prematurely sending while typing Chinese/IME candidates
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       sendMessage();
     }
+  });
+
+  // Mobile virtual keyboard & viewport handling
+  el.promptInput.addEventListener('focus', () => {
+    if (window.innerWidth <= 768) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 300);
+    }
+  });
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      if (document.activeElement === el.promptInput && window.innerWidth <= 768) {
+        scrollToBottom();
+      }
+    });
+  }
+
+  window.addEventListener('resize', () => {
+    updateModelTriggerDisplay();
   });
 
   // Auto resize textarea
@@ -402,18 +723,87 @@ function setupEventListeners() {
   });
   el.scrollBottomBtn.addEventListener('click', scrollToBottom);
 
+  // Model Cascader Trigger & Outside Click
+  if (el.modelCascaderTrigger) {
+    el.modelCascaderTrigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleModelCascader();
+    });
+  }
+
+  if (el.modelCascaderBackdrop) {
+    el.modelCascaderBackdrop.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeModelCascader();
+    });
+  }
+  if (el.modelSheetCloseBtn) {
+    el.modelSheetCloseBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeModelCascader();
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!el.modelCascaderPopover || el.modelCascaderPopover.classList.contains('hidden')) return;
+    const inContainer = el.modelCascaderContainer && el.modelCascaderContainer.contains(e.target);
+    const inMobileBtn = el.mobileNavModelBtn && el.mobileNavModelBtn.contains(e.target);
+    const inSettingsBtn = el.settingsOpenModelPickerBtn && el.settingsOpenModelPickerBtn.contains(e.target);
+    if (!inContainer && !inMobileBtn && !inSettingsBtn) {
+      closeModelCascader();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && el.modelCascaderPopover && !el.modelCascaderPopover.classList.contains('hidden')) {
+      closeModelCascader();
+    }
+  });
+
   // Model & Mode selections
-  el.modelSelect.addEventListener('change', () => {
-    state.activeModel = el.modelSelect.value;
-    localStorage.setItem('agy_model', state.activeModel);
+  if (el.modelSelect) {
+    el.modelSelect.addEventListener('change', () => {
+      state.activeModel = el.modelSelect.value;
+      localStorage.setItem('agy_model', state.activeModel);
+      updateModelTriggerDisplay();
+    });
+  }
+  if (el.modeSelect) {
+    el.modeSelect.addEventListener('change', () => {
+      setExecutionMode(el.modeSelect.value);
+    });
+  }
+  if (el.effortSelect) {
+    el.effortSelect.addEventListener('change', () => {
+      state.activeEffort = el.effortSelect.value;
+      localStorage.setItem('agy_effort', state.activeEffort);
+      updateModelTriggerDisplay();
+    });
+  }
+
+  // Execution Mode Cards in Modal
+  if (el.modeCardAccept) {
+    el.modeCardAccept.addEventListener('click', () => {
+      setExecutionMode('accept-edits');
+    });
+  }
+  if (el.modeCardPlan) {
+    el.modeCardPlan.addEventListener('click', () => {
+      setExecutionMode('plan');
+    });
+  }
+
+  // Mobile/Browser Tab Visibility & Resume Sync (后台继续执行并恢复同步)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      syncForegroundOnResume();
+    }
   });
-  el.modeSelect.addEventListener('change', () => {
-    state.activeMode = el.modeSelect.value;
-    localStorage.setItem('agy_mode', state.activeMode);
+  window.addEventListener('pageshow', () => {
+    syncForegroundOnResume();
   });
-  el.effortSelect.addEventListener('change', () => {
-    state.activeEffort = el.effortSelect.value;
-    localStorage.setItem('agy_effort', state.activeEffort);
+  window.addEventListener('focus', () => {
+    syncForegroundOnResume();
   });
 
   // Copy IP
@@ -493,6 +883,243 @@ function setupEventListeners() {
       }
     });
   }
+
+  // Account Modal & Manager Events
+  if (el.accountManagerBtn) {
+    el.accountManagerBtn.addEventListener('click', openAccountModal);
+  }
+  if (el.navQuickSwitchBestBtn) {
+    el.navQuickSwitchBestBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      switchToBestAccount();
+    });
+  }
+  if (el.composerAccountPill) {
+    el.composerAccountPill.addEventListener('click', openAccountModal);
+  }
+  if (el.composerQuickBestBtn) {
+    el.composerQuickBestBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      switchToBestAccount();
+    });
+  }
+  if (el.sidebarAccountCard) {
+    el.sidebarAccountCard.addEventListener('click', openAccountModal);
+  }
+  if (el.sidebarSwitchAccountBtn) {
+    el.sidebarSwitchAccountBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openAccountModal();
+    });
+  }
+  if (el.closeAccountModalBtn) {
+    el.closeAccountModalBtn.addEventListener('click', closeAccountModal);
+  }
+  if (el.closeAccountModalFooterBtn) {
+    el.closeAccountModalFooterBtn.addEventListener('click', closeAccountModal);
+  }
+  if (el.accountModal) {
+    el.accountModal.addEventListener('click', (e) => {
+      if (e.target === el.accountModal) closeAccountModal();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && el.accountModal && !el.accountModal.classList.contains('hidden')) {
+      closeAccountModal();
+    }
+  });
+  if (el.accountSearchInput) {
+    el.accountSearchInput.addEventListener('input', (e) => {
+      state.accountSearchTerm = e.target.value;
+      if (el.accountSearchClearBtn) {
+        if (state.accountSearchTerm) el.accountSearchClearBtn.classList.remove('hidden');
+        else el.accountSearchClearBtn.classList.add('hidden');
+      }
+      renderAccountModal();
+    });
+  }
+  if (el.accountSearchClearBtn) {
+    el.accountSearchClearBtn.addEventListener('click', () => {
+      if (el.accountSearchInput) el.accountSearchInput.value = '';
+      state.accountSearchTerm = '';
+      el.accountSearchClearBtn.classList.add('hidden');
+      renderAccountModal();
+    });
+  }
+  if (el.accountFilterChips) {
+    el.accountFilterChips.addEventListener('click', (e) => {
+      const chip = e.target.closest('.filter-chip');
+      if (!chip) return;
+      const filter = chip.dataset.filter || 'all';
+      state.accountFilter = filter;
+      el.accountFilterChips.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      renderAccountModal();
+    });
+  }
+
+  // Mobile Bottom Sheet Pull-to-Close gesture
+  const sheetHandle = document.querySelector('.account-sheet-handle');
+  if (sheetHandle) {
+    let startY = 0;
+    sheetHandle.addEventListener('touchstart', (e) => {
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+    sheetHandle.addEventListener('touchmove', (e) => {
+      const deltaY = e.touches[0].clientY - startY;
+      if (deltaY > 55) {
+        closeAccountModal();
+      }
+    }, { passive: true });
+  }
+
+  if (el.switchBestAccountBtn) {
+    el.switchBestAccountBtn.addEventListener('click', async () => {
+      await switchToBestAccount();
+    });
+  }
+  if (el.refreshQuotasBtn) {
+    el.refreshQuotasBtn.addEventListener('click', refreshQuotas);
+  }
+
+  // --- Settings Modal Listeners ---
+  if (el.settingsBtn) {
+    el.settingsBtn.addEventListener('click', openSettingsModal);
+  }
+  const sidebarSettingsBtn = document.getElementById('sidebarSettingsBtn');
+  if (sidebarSettingsBtn) {
+    sidebarSettingsBtn.addEventListener('click', () => {
+      closeSidebar();
+      openSettingsModal();
+    });
+  }
+  if (el.closeSettingsModalBtn) {
+    el.closeSettingsModalBtn.addEventListener('click', closeSettingsModal);
+  }
+  if (el.closeSettingsModalFooterBtn) {
+    el.closeSettingsModalFooterBtn.addEventListener('click', closeSettingsModal);
+  }
+  if (el.settingsModal) {
+    el.settingsModal.addEventListener('click', (e) => {
+      if (e.target === el.settingsModal) closeSettingsModal();
+    });
+  }
+  if (el.settingsQuickBestBtn) {
+    el.settingsQuickBestBtn.addEventListener('click', () => {
+      switchToBestAccount((success) => {
+        if (success) updateSettingsModal();
+      });
+    });
+  }
+  if (el.settingsOpenAccountPoolBtn) {
+    el.settingsOpenAccountPoolBtn.addEventListener('click', () => {
+      closeSettingsModal();
+      openAccountModal();
+    });
+  }
+  if (el.settingsRefreshQuotasBtn) {
+    el.settingsRefreshQuotasBtn.addEventListener('click', async () => {
+      await refreshQuotas();
+      updateSettingsModal();
+    });
+  }
+  if (el.settingsModeAccept) {
+    el.settingsModeAccept.addEventListener('click', () => {
+      setExecutionMode('accept-edits');
+      showToast('已切换至：⚡ 自动执行模式', 'info', 2000);
+    });
+  }
+  if (el.settingsModePlan) {
+    el.settingsModePlan.addEventListener('click', () => {
+      setExecutionMode('plan');
+      showToast('已切换至：📋 仅规划模式', 'info', 2000);
+    });
+  }
+  if (el.settingsOpenModelPickerBtn) {
+    el.settingsOpenModelPickerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      closeSettingsModal();
+      setTimeout(() => {
+        openModelCascader();
+      }, 60);
+    });
+  }
+  if (el.settingsSwitchWsBtn) {
+    el.settingsSwitchWsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeSettingsModal();
+      if (window.innerWidth <= 768) {
+        openSidebar();
+        el.workspaceDropdown.classList.remove('hidden');
+      } else {
+        if (el.sidebar && el.sidebar.classList.contains('collapsed')) {
+          el.sidebar.classList.remove('collapsed');
+        }
+        el.workspaceDropdown.classList.remove('hidden');
+      }
+    });
+  }
+  if (el.settingsAddWsBtn) {
+    el.settingsAddWsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeSettingsModal();
+      openAddWorkspaceModal();
+    });
+  }
+  if (el.settingsThemeDark) {
+    el.settingsThemeDark.addEventListener('click', () => setTheme('dark'));
+  }
+  if (el.settingsThemeLight) {
+    el.settingsThemeLight.addEventListener('click', () => setTheme('light'));
+  }
+  if (el.settingsCopyLanBtn) {
+    el.settingsCopyLanBtn.addEventListener('click', copyLanUrl);
+  }
+  if (el.settingsLockBtn) {
+    el.settingsLockBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeSettingsModal();
+      if (currentAccessToken) {
+        currentAccessToken = '';
+        localStorage.removeItem('agy_access_token');
+        updateAuthBadge(false);
+        showAuthModal(true);
+        showToast('控制台已锁定', 'info', 2500);
+      }
+    });
+  }
+
+  // Mobile Top Model Pill Trigger
+  if (el.mobileNavModelBtn) {
+    el.mobileNavModelBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      toggleModelCascader();
+    });
+  }
+
+  // Mobile & Desktop New Chat Buttons
+  if (el.mobileNewChatBtn) {
+    el.mobileNewChatBtn.addEventListener('click', () => {
+      closeSidebar();
+      startNewChat();
+    });
+  }
+  if (el.desktopNewChatBtn) {
+    el.desktopNewChatBtn.addEventListener('click', () => {
+      startNewChat();
+    });
+  }
+
+  // Mobile Composer Mode Toggle Chip
+  if (el.composerModeToggleBtn) {
+    el.composerModeToggleBtn.addEventListener('click', () => {
+      const nextMode = state.activeMode === 'plan' ? 'accept-edits' : 'plan';
+      setExecutionMode(nextMode);
+      showToast(nextMode === 'plan' ? '已切换至：📋 仅规划模式' : '已切换至：⚡ 自动执行模式', 'info', 2000);
+    });
+  }
 }
 
 // Set Theme
@@ -512,6 +1139,9 @@ function setTheme(themeName) {
       el.themeNameText.textContent = '浅色';
     }
   }
+
+  if (el.settingsThemeDark) el.settingsThemeDark.classList.toggle('active', themeName === 'dark');
+  if (el.settingsThemeLight) el.settingsThemeLight.classList.toggle('active', themeName === 'light');
 }
 
 // --- Insert Uploaded Server Path to Input ---
@@ -653,31 +1283,58 @@ async function loadSystemInfo() {
     el.copyUrlBtn.dataset.url = lanUrl;
     el.lanBadge.dataset.url = lanUrl;
 
-    // Populate Models
-    el.modelSelect.innerHTML = '';
-    const savedModel = localStorage.getItem('agy_model');
-    data.models.forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = m.id;
-      opt.textContent = m.name;
-      if (savedModel ? m.id === savedModel : m.default) {
-        opt.selected = true;
-        state.activeModel = m.id;
-      }
-      el.modelSelect.appendChild(opt);
-    });
-
-    // Restore mode & effort
-    const savedMode = localStorage.getItem('agy_mode');
-    if (savedMode) {
-      el.modeSelect.value = savedMode;
-      state.activeMode = savedMode;
+    // Point openManagerLink to port 8088 on current host
+    if (el.openManagerLink) {
+      el.openManagerLink.href = `http://${window.location.hostname}:8088/`;
     }
+
+    // Populate Models & Cascader
+    state.modelFamilies = (data.model_families && data.model_families.length > 0)
+      ? data.model_families
+      : MODEL_FAMILIES_FALLBACK;
+
+    // Backward compatibility for hidden modelSelect
+    if (el.modelSelect) {
+      el.modelSelect.innerHTML = '';
+      (data.models || []).forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name;
+        el.modelSelect.appendChild(opt);
+      });
+    }
+
+    // Restore saved model & effort
+    const savedModel = localStorage.getItem('agy_model');
     const savedEffort = localStorage.getItem('agy_effort');
+
+    if (savedModel && findEffortByModelId(savedModel)) {
+      state.activeModel = savedModel;
+      const foundEff = findEffortByModelId(savedModel);
+      if (foundEff) state.activeEffort = foundEff.effort;
+    } else {
+      state.activeModel = 'gemini-3.8-flash-high';
+      state.activeEffort = 'high';
+    }
+
     if (savedEffort) {
-      el.effortSelect.value = savedEffort;
       state.activeEffort = savedEffort;
     }
+
+    if (el.modelSelect) el.modelSelect.value = state.activeModel;
+    if (el.effortSelect) el.effortSelect.value = state.activeEffort;
+
+    // Update the trigger pill display
+    updateModelTriggerDisplay();
+
+    // Restore mode
+    const savedMode = localStorage.getItem('agy_mode');
+    if (savedMode) {
+      if (el.modeSelect) el.modeSelect.value = savedMode;
+      state.activeMode = savedMode;
+    }
+    updateModeCardsDisplay();
+    updateModelTriggerDisplay();
 
   } catch (err) {
     console.error('Failed to load system info:', err);
@@ -694,6 +1351,805 @@ async function loadWorkspaces() {
   }
 }
 
+// --- Google Account Management & Quota Switching ---
+
+function getQuotaColorClass(pct) {
+  if (pct == null) return 'muted';
+  if (pct <= 15) return 'danger';
+  if (pct <= 50) return 'warning';
+  return 'success';
+}
+
+function showToast(message, type = 'info', duration = 3000) {
+  const container = el.toastContainer || document.getElementById('toastContainer');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = `toast-message ${type}`;
+  let icon = 'ℹ️';
+  if (type === 'success') icon = '✓';
+  else if (type === 'warning') icon = '⚠️';
+  else if (type === 'error') icon = '✕';
+  toast.innerHTML = `
+    <span class="toast-icon">${icon}</span>
+    <span class="toast-text">${escapeHtml(message)}</span>
+  `;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('toast-exit');
+    setTimeout(() => toast.remove(), 220);
+  }, duration);
+}
+
+async function loadAccounts(silent = false) {
+  try {
+    const res = await fetch('/api/account-manager/accounts');
+    if (!res.ok) {
+      if (!silent) console.warn('Account manager accounts endpoint returned', res.status);
+      return;
+    }
+    const data = await res.json();
+    state.accounts = data.accounts || [];
+    state.activeAccountEmail = data.active_email || '';
+
+    updateNavbarAccountBadge();
+    updateComposerAccountBadge();
+    updateSidebarAccountBadge();
+    updateBestAccountPreview();
+    updateSettingsModal();
+
+    // If modal is open, re-render list
+    if (el.accountModal && !el.accountModal.classList.contains('hidden')) {
+      renderAccountModal();
+    }
+  } catch (err) {
+    if (!silent) console.warn('Failed to load accounts from manager:', err);
+  }
+}
+
+function getAccountQuotas(acc) {
+  const cq = acc?.cached_quota || {};
+  const q = cq.quota || {};
+  const claudePct = q.claude?.remaining_pct != null ? q.claude.remaining_pct : null;
+  const proPct = q.gemini_pro?.remaining_pct != null ? q.gemini_pro.remaining_pct : null;
+  const flashPct = q.gemini_flash?.remaining_pct != null ? q.gemini_flash.remaining_pct : null;
+  const tier = cq.tier || 'PRO';
+  const isForbidden = cq.is_forbidden || false;
+  const error = cq.error || null;
+  return { claudePct, proPct, flashPct, tier, isForbidden, error };
+}
+
+function updateNavbarAccountBadge() {
+  if (!el.navAccountEmail || !el.navAccountQuota) return;
+  const activeAcc = state.accounts.find(a => a.is_active || a.email === state.activeAccountEmail);
+  if (!activeAcc) {
+    if (state.activeAccountEmail) {
+      el.navAccountEmail.textContent = state.activeAccountEmail.split('@')[0];
+      el.navAccountEmail.title = state.activeAccountEmail;
+    } else {
+      el.navAccountEmail.textContent = '未配置账号';
+      el.navAccountEmail.title = '未关联 Google 账号';
+    }
+    el.navAccountQuota.textContent = '--';
+    el.navAccountQuota.className = 'account-quota-badge';
+    return;
+  }
+
+  const { claudePct, proPct } = getAccountQuotas(activeAcc);
+  el.navAccountEmail.textContent = activeAcc.email.split('@')[0];
+  el.navAccountEmail.title = `当前活跃账号: ${activeAcc.email}`;
+
+  let quotaText = '';
+  let badgeClass = 'account-quota-badge';
+
+  if (claudePct !== null && proPct !== null) {
+    quotaText = `C:${claudePct}% P:${proPct}%`;
+    const minPct = Math.min(claudePct, proPct);
+    badgeClass += ' ' + getQuotaColorClass(minPct);
+  } else if (claudePct !== null) {
+    quotaText = `Claude:${claudePct}%`;
+    badgeClass += ' ' + getQuotaColorClass(claudePct);
+  } else if (proPct !== null) {
+    quotaText = `Pro:${proPct}%`;
+    badgeClass += ' ' + getQuotaColorClass(proPct);
+  } else {
+    quotaText = '正常';
+    badgeClass += ' success';
+  }
+
+  el.navAccountQuota.textContent = quotaText;
+  el.navAccountQuota.className = badgeClass;
+  el.navAccountQuota.title = `Claude: ${claudePct ?? '?'}% · Gemini Pro: ${proPct ?? '?'}%`;
+}
+
+function updateComposerAccountBadge() {
+  if (!el.composerAccountEmail || !el.composerAccountQuota) return;
+  const activeAcc = state.accounts.find(a => a.is_active || a.email === state.activeAccountEmail);
+  if (!activeAcc) {
+    el.composerAccountEmail.textContent = state.activeAccountEmail ? state.activeAccountEmail.split('@')[0] : '未选账号';
+    el.composerAccountQuota.textContent = '--';
+    el.composerAccountQuota.className = 'cap-quota';
+    return;
+  }
+  const { claudePct, proPct } = getAccountQuotas(activeAcc);
+  el.composerAccountEmail.textContent = activeAcc.email.split('@')[0];
+  const maxPct = Math.max(claudePct != null ? claudePct : 0, proPct != null ? proPct : 0);
+  el.composerAccountQuota.textContent = `${maxPct}%`;
+  el.composerAccountQuota.className = `cap-quota ${getQuotaColorClass(maxPct)}`;
+}
+
+function updateSidebarAccountBadge() {
+  if (!el.sidebarAccountEmail) return;
+  const activeAcc = state.accounts.find(a => a.is_active || a.email === state.activeAccountEmail);
+  if (activeAcc) {
+    el.sidebarAccountEmail.textContent = activeAcc.email;
+    el.sidebarAccountEmail.title = activeAcc.email;
+  } else if (state.activeAccountEmail) {
+    el.sidebarAccountEmail.textContent = state.activeAccountEmail;
+    el.sidebarAccountEmail.title = state.activeAccountEmail;
+  } else {
+    el.sidebarAccountEmail.textContent = '账号管理中...';
+  }
+}
+
+async function updateBestAccountPreview() {
+  if (!el.bestQuotaPreviewTag) return;
+  try {
+    const res = await fetch('/api/account-manager/best');
+    if (!res.ok) return;
+    const data = await res.json();
+    state.bestAccountInfo = data;
+    if (data.email && data.avg_remaining_pct != null) {
+      el.bestQuotaPreviewTag.textContent = `${Math.round(data.avg_remaining_pct)}%`;
+      if (el.switchBestAccountBtn) {
+        el.switchBestAccountBtn.title = `一键切换至当前最佳账号: ${data.email} (平均配额: ${Math.round(data.avg_remaining_pct)}%)`;
+      }
+    }
+  } catch (e) {}
+}
+
+function openAccountModal() {
+  if (!el.accountModal) return;
+  if (window.innerWidth <= 768) {
+    closeSidebar();
+  }
+  el.accountModal.classList.remove('hidden');
+  if (el.accountSearchInput) {
+    el.accountSearchInput.value = '';
+    state.accountSearchTerm = '';
+  }
+  loadAccounts();
+  renderAccountModal();
+  setTimeout(() => {
+    if (window.innerWidth > 768 && el.accountSearchInput) {
+      el.accountSearchInput.focus();
+    }
+  }, 100);
+}
+
+function closeAccountModal() {
+  if (!el.accountModal) return;
+  el.accountModal.classList.add('hidden');
+}
+
+function openSettingsModal() {
+  if (!el.settingsModal) return;
+  if (window.innerWidth <= 768) {
+    closeSidebar();
+  }
+  updateSettingsModal();
+  el.settingsModal.classList.remove('hidden');
+}
+
+function closeSettingsModal() {
+  if (!el.settingsModal) return;
+  el.settingsModal.classList.add('hidden');
+}
+
+function updateSettingsModal() {
+  // 1. Account & Quotas
+  const activeAcc = state.accounts.find(a => a.is_active || a.email === state.activeAccountEmail);
+  if (el.settingsAccountEmail) {
+    if (activeAcc) {
+      el.settingsAccountEmail.textContent = activeAcc.email;
+      el.settingsAccountEmail.title = activeAcc.email;
+    } else if (state.activeAccountEmail) {
+      el.settingsAccountEmail.textContent = state.activeAccountEmail;
+      el.settingsAccountEmail.title = state.activeAccountEmail;
+    } else {
+      el.settingsAccountEmail.textContent = '未选定账号';
+    }
+  }
+
+  if (el.settingsAccountTier) {
+    if (activeAcc) {
+      const { tier } = getAccountQuotas(activeAcc);
+      let tierLabel = tier || 'PRO';
+      if (tierLabel.toLowerCase().includes('g1-pro') || tierLabel.toLowerCase().includes('g1_pro')) {
+        tierLabel = 'Google One Pro 会员';
+      } else if (tierLabel.toLowerCase().includes('pro')) {
+        tierLabel = 'Pro 高级会员';
+      } else if (tierLabel.toLowerCase().includes('free')) {
+        tierLabel = '免费标准版';
+      }
+      el.settingsAccountTier.textContent = tierLabel;
+    } else {
+      el.settingsAccountTier.textContent = 'Pro 高级会员';
+    }
+  }
+
+  if (el.settingsQuotasBars) {
+    if (activeAcc) {
+      const { claudePct, proPct, flashPct } = getAccountQuotas(activeAcc);
+      const getFillColor = (pct) => {
+        if (pct === null || pct === undefined) return '#94a3b8';
+        if (pct <= 0) return 'var(--danger)';
+        if (pct < 20) return 'var(--warning)';
+        return 'var(--success)';
+      };
+
+      el.settingsQuotasBars.innerHTML = `
+        <div class="settings-quota-item">
+          <div class="settings-quota-label">
+            <span>Claude</span>
+            <span class="settings-quota-val" style="color:${getFillColor(claudePct)}">${claudePct !== null ? claudePct + '%' : '--'}</span>
+          </div>
+          <div class="settings-quota-track">
+            <div class="settings-quota-fill" style="width:${Math.max(0, Math.min(100, claudePct || 0))}%; background-color:${getFillColor(claudePct)};"></div>
+          </div>
+        </div>
+        <div class="settings-quota-item">
+          <div class="settings-quota-label">
+            <span>Gemini Pro</span>
+            <span class="settings-quota-val" style="color:${getFillColor(proPct)}">${proPct !== null ? proPct + '%' : '--'}</span>
+          </div>
+          <div class="settings-quota-track">
+            <div class="settings-quota-fill" style="width:${Math.max(0, Math.min(100, proPct || 0))}%; background-color:${getFillColor(proPct)};"></div>
+          </div>
+        </div>
+        <div class="settings-quota-item">
+          <div class="settings-quota-label">
+            <span>Flash</span>
+            <span class="settings-quota-val" style="color:${getFillColor(flashPct)}">${flashPct !== null ? flashPct + '%' : '--'}</span>
+          </div>
+          <div class="settings-quota-track">
+            <div class="settings-quota-fill" style="width:${Math.max(0, Math.min(100, flashPct || 0))}%; background-color:${getFillColor(flashPct)};"></div>
+          </div>
+        </div>
+      `;
+    } else {
+      el.settingsQuotasBars.innerHTML = '<span style="color:var(--text-dim);font-size:12px;padding:4px 0;">暂无配额详情</span>';
+    }
+  }
+
+  // 2. Execution Mode & Model
+  const isPlan = state.activeMode === 'plan';
+  if (el.settingsModeAccept) el.settingsModeAccept.classList.toggle('active', !isPlan);
+  if (el.settingsModePlan) el.settingsModePlan.classList.toggle('active', isPlan);
+
+  const family = findFamilyByModelId(state.activeModel);
+  const effort = findEffortByModelId(state.activeModel);
+  if (el.settingsModelSummary) {
+    const fName = family ? family.name : state.activeModel;
+    const eLabel = effort ? effort.label : state.activeEffort;
+    el.settingsModelSummary.textContent = `${fName} · ${eLabel}`;
+  }
+
+  // 3. Workspace
+  if (state.currentWorkspace) {
+    if (el.settingsWsName) el.settingsWsName.textContent = state.currentWorkspace.name || '工作区';
+    if (el.settingsWsPath) el.settingsWsPath.textContent = state.currentWorkspace.path || '';
+  }
+
+  // 4. Theme
+  const isDark = state.theme === 'dark';
+  if (el.settingsThemeDark) el.settingsThemeDark.classList.toggle('active', isDark);
+  if (el.settingsThemeLight) el.settingsThemeLight.classList.toggle('active', !isDark);
+
+  // 5. LAN URL
+  if (el.settingsLanUrl && el.navLanUrl) {
+    el.settingsLanUrl.textContent = el.navLanUrl.textContent || window.location.origin;
+  }
+}
+
+function renderAccountModal() {
+  if (!el.accountListContainer) return;
+
+  const activeAcc = state.accounts.find(a => a.is_active || a.email === state.activeAccountEmail);
+  
+  // Total badge
+  if (el.accountPoolTotalBadge) {
+    el.accountPoolTotalBadge.textContent = `${state.accounts.length}个`;
+  }
+
+  // Filter counts
+  if (el.chipCountAll) el.chipCountAll.textContent = state.accounts.length;
+  if (el.chipCountNormal) el.chipCountNormal.textContent = state.accounts.filter(a => a.status !== 'abnormal').length;
+  if (el.chipCountHigh) {
+    el.chipCountHigh.textContent = state.accounts.filter(a => {
+      const q = getAccountQuotas(a);
+      return Math.max(q.claudePct || 0, q.proPct || 0) >= 70;
+    }).length;
+  }
+  if (el.chipCountPro) {
+    el.chipCountPro.textContent = state.accounts.filter(a => {
+      const t = (a.cached_quota?.tier || '').toLowerCase();
+      return t.includes('pro');
+    }).length;
+  }
+  if (el.chipCountLow) {
+    el.chipCountLow.textContent = state.accounts.filter(a => {
+      const q = getAccountQuotas(a);
+      return Math.max(q.claudePct || 0, q.proPct || 0) <= 30;
+    }).length;
+  }
+
+  // Render Current Active Account Spotlight
+  if (el.currentAccountBannerEmail) {
+    if (activeAcc) {
+      el.currentAccountBannerEmail.textContent = activeAcc.email;
+      const { claudePct, proPct, flashPct, tier } = getAccountQuotas(activeAcc);
+      if (el.currentAccountBannerTier) {
+        el.currentAccountBannerTier.textContent = tier.toUpperCase();
+      }
+      if (el.currentAccountBannerQuotas) {
+        const cColor = getQuotaColorClass(claudePct);
+        const pColor = getQuotaColorClass(proPct);
+        const fColor = getQuotaColorClass(flashPct);
+        el.currentAccountBannerQuotas.innerHTML = `
+          <div class="quota-chip ${cColor}">
+            <div class="qc-header">
+              <span class="qc-name">Claude Sonnet</span>
+              <span class="qc-val">${claudePct != null ? claudePct + '%' : '无'}</span>
+            </div>
+            <div class="qc-bar-track">
+              <div class="qc-bar-fill ${cColor}" style="width: ${claudePct ?? 0}%"></div>
+            </div>
+          </div>
+          <div class="quota-chip ${pColor}">
+            <div class="qc-header">
+              <span class="qc-name">Gemini Pro</span>
+              <span class="qc-val">${proPct != null ? proPct + '%' : '无'}</span>
+            </div>
+            <div class="qc-bar-track">
+              <div class="qc-bar-fill ${pColor}" style="width: ${proPct ?? 0}%"></div>
+            </div>
+          </div>
+          <div class="quota-chip ${fColor}">
+            <div class="qc-header">
+              <span class="qc-name">Gemini Flash</span>
+              <span class="qc-val">${flashPct != null ? flashPct + '%' : '无'}</span>
+            </div>
+            <div class="qc-bar-track">
+              <div class="qc-bar-fill ${fColor}" style="width: ${flashPct ?? 0}%"></div>
+            </div>
+          </div>
+        `;
+      }
+    } else {
+      el.currentAccountBannerEmail.textContent = state.activeAccountEmail || '未选定账号';
+      if (el.currentAccountBannerQuotas) {
+        el.currentAccountBannerQuotas.innerHTML = '<span style="color:var(--text-dim);font-size:12px;">暂无配额详情</span>';
+      }
+    }
+  }
+
+  // Filter accounts
+  const query = (state.accountSearchTerm || '').trim().toLowerCase();
+  const filter = state.accountFilter || 'all';
+  let list = [...state.accounts];
+
+  // Apply search query
+  if (query) {
+    list = list.filter(a => {
+      const email = (a.email || '').toLowerCase();
+      const status = (a.status || '').toLowerCase();
+      const note = (a.status_note || '').toLowerCase();
+      const tier = (a.cached_quota?.tier || '').toLowerCase();
+      return email.includes(query) || status.includes(query) || note.includes(query) || tier.includes(query);
+    });
+  }
+
+  // Apply quick category filter
+  if (filter === 'normal') {
+    list = list.filter(a => a.status !== 'abnormal');
+  } else if (filter === 'high') {
+    list = list.filter(a => {
+      const q = getAccountQuotas(a);
+      return Math.max(q.claudePct || 0, q.proPct || 0) >= 70;
+    });
+  } else if (filter === 'pro') {
+    list = list.filter(a => {
+      const t = (a.cached_quota?.tier || '').toLowerCase();
+      return t.includes('pro');
+    });
+  } else if (filter === 'low') {
+    list = list.filter(a => {
+      const q = getAccountQuotas(a);
+      return Math.max(q.claudePct || 0, q.proPct || 0) <= 30;
+    });
+  }
+
+  // Sort: Active first, then higher quotas descending, abnormal last
+  list.sort((a, b) => {
+    const aIsActive = a.is_active || a.email === state.activeAccountEmail;
+    const bIsActive = b.is_active || b.email === state.activeAccountEmail;
+    if (aIsActive) return -1;
+    if (bIsActive) return 1;
+    if (a.status === 'abnormal' && b.status !== 'abnormal') return 1;
+    if (a.status !== 'abnormal' && b.status === 'abnormal') return -1;
+    
+    const qa = getAccountQuotas(a);
+    const qb = getAccountQuotas(b);
+    const maxA = Math.max(qa.claudePct || 0, qa.proPct || 0);
+    const maxB = Math.max(qb.claudePct || 0, qb.proPct || 0);
+    return maxB - maxA;
+  });
+
+  if (list.length === 0) {
+    el.accountListContainer.innerHTML = `
+      <div class="account-empty-state" style="text-align:center;padding:24px 10px;color:var(--text-dim);font-size:12.5px;">
+        ${query ? `未搜索到匹配 "${escapeHtml(query)}" 的账号` : '暂无匹配此筛选条件的账号'}
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+  list.forEach(acc => {
+    const isActive = acc.is_active || acc.email === state.activeAccountEmail;
+    const isAbnormal = acc.status === 'abnormal';
+    const { claudePct, proPct, flashPct, tier } = getAccountQuotas(acc);
+    const cColor = getQuotaColorClass(claudePct);
+    const pColor = getQuotaColorClass(proPct);
+    const fColor = getQuotaColorClass(flashPct);
+
+    html += `
+      <div class="account-item-card ${isActive ? 'is-active' : ''} ${isAbnormal ? 'is-abnormal' : ''}" data-email="${escapeHtml(acc.email)}" title="${isActive ? '当前活跃账号' : '点击直接切换到此账号'}">
+        <div class="acc-card-left">
+          <div class="acc-header-row">
+            <span class="acc-status-indicator ${isActive ? 'online' : isAbnormal ? 'abnormal' : 'normal'}"></span>
+            <span class="acc-email-text">${escapeHtml(acc.email)}</span>
+            <span class="acc-tier-pill ${escapeHtml(tier.toLowerCase())}">${escapeHtml(tier)}</span>
+            ${isActive ? '<span class="acc-using-pill">使用中</span>' : ''}
+          </div>
+          <div class="acc-meters-row">
+            <div class="acc-meter-item">
+              <span class="acc-meter-name">Claude:</span>
+              <div class="acc-meter-track">
+                <div class="acc-meter-fill ${cColor}" style="width: ${claudePct ?? 0}%"></div>
+              </div>
+              <span class="acc-meter-val ${cColor}">${claudePct != null ? claudePct + '%' : '--'}</span>
+            </div>
+            <div class="acc-meter-item">
+              <span class="acc-meter-name">Pro:</span>
+              <div class="acc-meter-track">
+                <div class="acc-meter-fill ${pColor}" style="width: ${proPct ?? 0}%"></div>
+              </div>
+              <span class="acc-meter-val ${pColor}">${proPct != null ? proPct + '%' : '--'}</span>
+            </div>
+            <div class="acc-meter-item">
+              <span class="acc-meter-name">Flash:</span>
+              <div class="acc-meter-track">
+                <div class="acc-meter-fill ${fColor}" style="width: ${flashPct ?? 0}%"></div>
+              </div>
+              <span class="acc-meter-val ${fColor}">${flashPct != null ? flashPct + '%' : '--'}</span>
+            </div>
+          </div>
+        </div>
+        <div class="acc-card-right">
+          ${isActive ? `
+            <div class="acc-active-check">✓ 当前</div>
+          ` : `
+            <button type="button" class="btn btn-primary btn-xs btn-switch-account" data-email="${escapeHtml(acc.email)}">
+              切换
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+  });
+
+  el.accountListContainer.innerHTML = html;
+
+  // Clicking anywhere on the card switches to that account
+  el.accountListContainer.querySelectorAll('.account-item-card:not(.is-active)').forEach(card => {
+    card.addEventListener('click', async () => {
+      const email = card.dataset.email;
+      if (!email) return;
+      const btn = card.querySelector('.btn-switch-account');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '切换中...';
+      }
+      await switchAccount(email);
+    });
+  });
+}
+
+async function switchAccount(email, onComplete = null) {
+  if (state.isSwitchingAccount) return;
+  state.isSwitchingAccount = true;
+  updateStatus(`正在切换至账号 ${email}...`);
+  showToast(`正在切换至账号 ${email.split('@')[0]}...`, 'info', 2000);
+
+  try {
+    const res = await fetch('/api/account-manager/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    const data = await res.json();
+    if (!res.ok || data.ok === false) {
+      throw new Error(data.error || data.detail || '切换失败');
+    }
+
+    state.activeAccountEmail = email;
+    await loadAccounts(true);
+    updateStatus(`✓ 已切换至账号: ${email}`);
+    showToast(`✓ 已成功切换至账号: ${email}`, 'success', 3000);
+
+    closeAccountModal();
+
+    if (typeof onComplete === 'function') {
+      onComplete(true, email);
+    }
+  } catch (err) {
+    console.error('Account switch failed:', err);
+    showToast(`切换账号失败: ${err.message}`, 'error', 4000);
+    updateStatus(`切换失败: ${err.message}`);
+    if (typeof onComplete === 'function') {
+      onComplete(false, err);
+    }
+  } finally {
+    state.isSwitchingAccount = false;
+  }
+}
+
+async function switchToBestAccount(onComplete = null) {
+  if (state.isSwitchingAccount) return;
+  updateStatus('正在查询配额最高最佳账号...');
+  showToast('正在查询配额最佳账号...', 'info', 1500);
+
+  try {
+    const res = await fetch('/api/account-manager/best');
+    const data = await res.json();
+    if (!res.ok || !data.email) {
+      throw new Error(data.error || data.detail || '无法获取最佳账号');
+    }
+
+    const bestEmail = data.email;
+    if (bestEmail === state.activeAccountEmail) {
+      updateStatus(`当前账号已是最佳状态 (${bestEmail})`);
+      showToast(`当前账号 (${bestEmail.split('@')[0]}) 额度已是最高状态`, 'success', 2500);
+      if (typeof onComplete === 'function') {
+        onComplete(true, bestEmail);
+      }
+      return;
+    }
+
+    await switchAccount(bestEmail, onComplete);
+  } catch (err) {
+    console.error('Failed to get best account:', err);
+    showToast(`获取最佳账号失败: ${err.message}`, 'error', 4000);
+    if (typeof onComplete === 'function') {
+      onComplete(false, err);
+    }
+  }
+}
+
+async function refreshQuotas() {
+  if (!el.refreshQuotasBtn) return;
+  const origText = el.refreshQuotasBtn.textContent;
+  el.refreshQuotasBtn.disabled = true;
+  el.refreshQuotasBtn.textContent = '正在刷新...';
+  try {
+    await fetch('/api/account-manager/quota/refresh', { method: 'POST' });
+    updateStatus('已发起全量额度刷新，后台正在检测...');
+    setTimeout(async () => {
+      await loadAccounts(true);
+      if (el.refreshQuotasBtn) {
+        el.refreshQuotasBtn.disabled = false;
+        el.refreshQuotasBtn.textContent = origText;
+      }
+    }, 2500);
+  } catch (err) {
+    console.warn('Refresh quotas error:', err);
+    if (el.refreshQuotasBtn) {
+      el.refreshQuotasBtn.disabled = false;
+      el.refreshQuotasBtn.textContent = origText;
+    }
+  }
+}
+
+function showQuotaExhaustedCard(session, errorMsg = '') {
+  if (!session || !session.currentStreamMessage) return;
+  const bodyEl = session.currentStreamMessage.bodyEl;
+  if (!bodyEl) return;
+
+  if (bodyEl.querySelector('.quota-exhausted-card')) {
+    return;
+  }
+
+  const card = document.createElement('div');
+  card.className = 'quota-exhausted-card';
+
+  let displayMsg = '当前账号可用配额已耗尽或触发速率限制 (429 / Resource Exhausted)。可随时一键切换账号继续任务。';
+  if (errorMsg) {
+    try {
+      const parsed = typeof errorMsg === 'string' ? JSON.parse(errorMsg) : errorMsg;
+      if (parsed.message) displayMsg = parsed.message;
+      else if (parsed.error) displayMsg = typeof parsed.error === 'string' ? parsed.error : parsed.error.message || displayMsg;
+    } catch (e) {
+      displayMsg = String(errorMsg).slice(0, 160);
+    }
+  }
+
+  card.innerHTML = `
+    <div class="qec-header">
+      <span class="qec-icon">⚠️</span>
+      <div class="qec-title-wrap">
+        <div class="qec-title">智能体请求配额已耗尽 (Resource Exhausted)</div>
+        <div class="qec-desc">${escapeHtml(displayMsg)}</div>
+      </div>
+    </div>
+    <div class="qec-actions">
+      <button type="button" class="qec-btn-best">
+        <span>⚡ 一键切换最佳账号并重试</span>
+      </button>
+      <button type="button" class="qec-btn-select">
+        <span>👤 挑选账号...</span>
+      </button>
+    </div>
+  `;
+
+  bodyEl.appendChild(card);
+  scrollToBottom();
+
+  const bestBtn = card.querySelector('.qec-btn-best');
+  const selectBtn = card.querySelector('.qec-btn-select');
+
+  if (selectBtn) {
+    selectBtn.addEventListener('click', () => {
+      openAccountModal();
+    });
+  }
+
+  if (bestBtn) {
+    bestBtn.addEventListener('click', async () => {
+      bestBtn.disabled = true;
+      bestBtn.innerHTML = '<span class="spinner-inline"></span> <span>正在切换最佳账号...</span>';
+
+      await switchToBestAccount(async (success, newEmail) => {
+        if (success) {
+          bestBtn.innerHTML = `<span>✓ 已切换至 ${newEmail.split('@')[0]}，准备重试</span>`;
+          card.classList.add('resolved');
+          if (session.prompt) {
+            setTimeout(() => {
+              retrySessionTask(session);
+            }, 600);
+          }
+        } else {
+          bestBtn.disabled = false;
+          bestBtn.innerHTML = '<span>⚡ 重试切换最佳账号</span>';
+        }
+      });
+    });
+  }
+}
+
+function retrySessionTask(session) {
+  if (!session || !session.prompt) return;
+
+  const currentWs = session.workspace || state.currentWorkspace?.path || '.';
+  const container = session.container || getOrCreateSessionContainer(session.sessionId);
+
+  const newAssistantMsgObj = createAssistantMessageContainer(container);
+  const abortController = new AbortController();
+
+  const retryContext = {
+    sessionId: session.sessionId,
+    tempId: session.tempId,
+    container: container,
+    currentStreamMessage: newAssistantMsgObj,
+    currentToolsMap: new Map(),
+    abortController: abortController,
+    statusText: '已切换账号，正在重新发起任务...',
+    prompt: session.prompt,
+    workspace: currentWs,
+    images: session.images || []
+  };
+
+  state.activeSessions.set(session.sessionId, retryContext);
+  state.runningSessionIds.add(session.sessionId);
+
+  updateGeneratingUI();
+  scrollToBottom();
+
+  runSessionStream(retryContext, session.prompt, currentWs, session.sessionId, session.images || []);
+}
+
+function pathResolve(p) {
+  if (!p) return '';
+  return String(p).replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+// --- Workspace Rename Helpers ---
+function openRenameWorkspaceModal(ws) {
+  if (window.innerWidth <= 768) closeSidebar();
+  if (!ws) return;
+  state.workspaceToRename = ws;
+  if (el.renameWsPathPreview) {
+    el.renameWsPathPreview.textContent = ws.path || '(无路径)';
+    el.renameWsPathPreview.title = ws.path || '';
+  }
+  if (el.renameWsInputName) {
+    el.renameWsInputName.value = ws.name || '';
+  }
+  if (el.renameWorkspaceModal) {
+    el.renameWorkspaceModal.classList.remove('hidden');
+    setTimeout(() => el.renameWsInputName?.focus(), 50);
+  }
+}
+
+function closeRenameWorkspaceModal() {
+  state.workspaceToRename = null;
+  if (el.renameWorkspaceModal) {
+    el.renameWorkspaceModal.classList.add('hidden');
+  }
+}
+
+async function saveWorkspaceRename() {
+  const ws = state.workspaceToRename;
+  if (!ws) return;
+  const newName = (el.renameWsInputName?.value || '').trim();
+  if (!newName) {
+    alert('工作区名称不能为空');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/workspaces/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: ws.id,
+        path: ws.path,
+        name: newName
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '重命名失败');
+
+    state.workspaces = data.workspaces;
+
+    if (state.currentWorkspace && (state.currentWorkspace.id === ws.id || pathResolve(state.currentWorkspace.path) === pathResolve(ws.path))) {
+      state.currentWorkspace.name = newName;
+      if (el.currentWsName) el.currentWsName.textContent = newName;
+      if (el.navWsPath) el.navWsPath.textContent = newName;
+    }
+
+    state.conversations.forEach(c => {
+      if (c.workspace_id === ws.id || (c.workspace_path && pathResolve(c.workspace_path) === pathResolve(ws.path))) {
+        c.workspace_name = newName;
+      }
+    });
+
+    closeRenameWorkspaceModal();
+    renderWorkspacesList();
+    renderConversationsList();
+  } catch (err) {
+    alert('重命名工作区失败: ' + err.message);
+  }
+}
+
+function setHistoryViewMode(mode) {
+  state.historyViewMode = mode;
+  localStorage.setItem('agy_history_view_mode', mode);
+  if (el.historyTabAll) el.historyTabAll.classList.toggle('active', mode === 'all');
+  if (el.historyTabCurrent) el.historyTabCurrent.classList.toggle('active', mode === 'current');
+  renderConversationsList();
+}
+
 function renderWorkspacesList() {
   el.workspaceList.innerHTML = '';
   state.workspaces.forEach(ws => {
@@ -704,12 +2160,28 @@ function renderWorkspacesList() {
         <div class="ws-item-title">${escapeHtml(ws.name)}</div>
         <div class="ws-item-path" title="${escapeHtml(ws.path)}">${escapeHtml(ws.path)}</div>
       </div>
-      <button class="btn-icon-sm delete-ws-btn" title="从列表移除">✕</button>
+      <div class="ws-item-actions">
+        <button class="btn-icon-sm rename-ws-btn" title="重命名工作区">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+        <button class="btn-icon-sm delete-ws-btn" title="从列表移除">✕</button>
+      </div>
     `;
 
     item.querySelector('.ws-item-info').addEventListener('click', () => {
       setWorkspace(ws);
       el.workspaceDropdown.classList.add('hidden');
+      if (window.innerWidth <= 768) {
+        closeSidebar();
+      }
+    });
+
+    item.querySelector('.rename-ws-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openRenameWorkspaceModal(ws);
     });
 
     item.querySelector('.delete-ws-btn').addEventListener('click', async (e) => {
@@ -723,16 +2195,40 @@ function renderWorkspacesList() {
   });
 }
 
+function formatShortWsName(ws) {
+  if (!ws) return '';
+  const raw = ws.name || ws.path || '';
+  return raw.replace(/\s*\([^)]*\)/g, '').trim() || raw;
+}
+
 function setWorkspace(ws) {
+  if (!ws) return;
   state.currentWorkspace = ws;
-  localStorage.setItem('agy_last_ws', ws.path);
-  el.currentWsName.textContent = ws.name;
-  el.currentWsPath.textContent = ws.path;
-  el.currentWsPath.title = ws.path;
-  el.navWsPath.textContent = ws.name;
-  el.navbarWsPill.title = `工作区路径: ${ws.path}`;
-  if (el.welcomeWsPath) el.welcomeWsPath.textContent = ws.path;
+  if (ws.path) localStorage.setItem('agy_last_ws', ws.path);
+  if (el.currentWsName) el.currentWsName.textContent = ws.name || ws.path || '';
+  if (el.currentWsPath) {
+    el.currentWsPath.textContent = ws.path || '';
+    el.currentWsPath.title = ws.path || '';
+  }
+  if (el.navWsPath) {
+    el.navWsPath.textContent = formatShortWsName(ws);
+    el.navWsPath.title = `${ws.name || ''}\n${ws.path || ''}`;
+  }
+  if (el.navbarWsPill) el.navbarWsPill.title = `工作区路径: ${ws.path || ''} (点击切换)`;
+  if (el.welcomeWsPath) el.welcomeWsPath.textContent = ws.path || '';
+  const wsTextEl = document.getElementById('welcomeWsBadgeText');
+  if (wsTextEl) {
+    wsTextEl.textContent = ws.name || ws.path || '';
+  } else if (el.welcomeWsBadge) {
+    el.welcomeWsBadge.textContent = ws.name ? `📁 ${ws.name}` : `📁 ${ws.path}`;
+  }
+  if (el.welcomeWsBadge) {
+    el.welcomeWsBadge.title = `工作区路径: ${ws.path || ''} (点击切换)`;
+  }
+  if (el.settingsWsName) el.settingsWsName.textContent = ws.name || '工作区';
+  if (el.settingsWsPath) el.settingsWsPath.textContent = ws.path || '';
   renderWorkspacesList();
+  renderConversationsList();
 }
 
 async function loadConversations(silent = false) {
@@ -740,7 +2236,7 @@ async function loadConversations(silent = false) {
     if (!silent && state.conversations.length === 0) {
       el.historyList.innerHTML = '<div class="loading-state">加载中...</div>';
     }
-    const res = await fetch('/api/conversations?limit=30');
+    const res = await fetch('/api/conversations?limit=100');
     if (!res.ok) throw new Error('Failed to load conversations');
     const list = await res.json();
     state.conversations = list;
@@ -750,7 +2246,6 @@ async function loadConversations(silent = false) {
       if (c.is_running) {
         state.runningSessionIds.add(c.id);
       } else {
-        // 仅当前端本标签页没有活跃的 stream 时才移除
         if (!state.activeSessions.has(c.id)) {
           state.runningSessionIds.delete(c.id);
         }
@@ -766,6 +2261,49 @@ async function loadConversations(silent = false) {
   }
 }
 
+function createHistoryItemElement(c) {
+  const isRunning = c.is_running || state.runningSessionIds.has(c.id);
+  const isActive = state.currentConversationId === c.id;
+  const item = document.createElement('div');
+  item.className = 'history-item' + (isActive ? ' active' : '') + (isRunning ? ' is-running' : '');
+  
+  const timeStr = formatRelativeTime(c.updated_at || c.created_at);
+  item.innerHTML = `
+    <span class="history-title" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</span>
+    <div class="history-meta-row">
+      ${isRunning ? `
+        <span class="history-status-badge status-running">
+          <span class="status-pulse-dot"></span> 运行中
+        </span>
+      ` : `
+        <span class="history-status-badge status-completed">
+          <span class="status-check-icon">✓</span> 已完成
+        </span>
+      `}
+      <span class="history-time">${timeStr}</span>
+    </div>
+  `;
+
+  item.addEventListener('click', () => {
+    // If conversation belongs to another workspace, switch active workspace
+    if (c.workspace_path && state.currentWorkspace && pathResolve(state.currentWorkspace.path) !== pathResolve(c.workspace_path)) {
+      const match = state.workspaces.find(w => pathResolve(w.path) === pathResolve(c.workspace_path));
+      if (match) {
+        setWorkspace(match);
+      } else {
+        setWorkspace({
+          id: c.workspace_id || 'ws_' + Date.now(),
+          name: c.workspace_name || c.workspace_path,
+          path: c.workspace_path
+        });
+      }
+    }
+    switchConversation(c.id, c.title);
+  });
+
+  return item;
+}
+
 function renderConversationsList() {
   el.historyList.innerHTML = '';
   if (state.conversations.length === 0) {
@@ -773,31 +2311,164 @@ function renderConversationsList() {
     return;
   }
 
+  // Update tabs active state
+  if (el.historyTabAll) el.historyTabAll.classList.toggle('active', state.historyViewMode === 'all');
+  if (el.historyTabCurrent) el.historyTabCurrent.classList.toggle('active', state.historyViewMode === 'current');
+
+  // Mode 1: Current Workspace Only
+  if (state.historyViewMode === 'current') {
+    const curPath = state.currentWorkspace ? pathResolve(state.currentWorkspace.path) : '';
+    const curId = state.currentWorkspace ? state.currentWorkspace.id : '';
+
+    const currentItems = state.conversations.filter(c => {
+      if (curPath && c.workspace_path && pathResolve(c.workspace_path) === curPath) return true;
+      if (curId && c.workspace_id === curId) return true;
+      return false;
+    });
+
+    if (currentItems.length === 0) {
+      const emptyBox = document.createElement('div');
+      emptyBox.className = 'empty-state';
+      emptyBox.style.cssText = 'padding: 24px 12px; text-align: center; color: var(--text-dim); font-size: 11px;';
+      emptyBox.innerHTML = `
+        <div>当前工作区暂无历史会话</div>
+        <button class="btn btn-secondary btn-sm" style="margin-top: 8px;" id="curWsNewChatBtn">+ 新建对话</button>
+      `;
+      emptyBox.querySelector('#curWsNewChatBtn')?.addEventListener('click', startNewChat);
+      el.historyList.appendChild(emptyBox);
+      return;
+    }
+
+    currentItems.forEach(c => {
+      el.historyList.appendChild(createHistoryItemElement(c));
+    });
+    return;
+  }
+
+  // Mode 2: Grouped by Workspace (全部分类)
+  const curPath = state.currentWorkspace ? pathResolve(state.currentWorkspace.path) : '';
+  const curId = state.currentWorkspace ? state.currentWorkspace.id : '';
+
+  // Collect groups
+  const groupsMap = new Map();
+  if (state.currentWorkspace) {
+    groupsMap.set(state.currentWorkspace.id, {
+      id: state.currentWorkspace.id,
+      name: state.currentWorkspace.name,
+      path: state.currentWorkspace.path,
+      is_current: true,
+      items: []
+    });
+  }
+
   state.conversations.forEach(c => {
-    const isRunning = c.is_running || state.runningSessionIds.has(c.id);
-    const isActive = state.currentConversationId === c.id;
-    const item = document.createElement('div');
-    item.className = 'history-item' + (isActive ? ' active' : '') + (isRunning ? ' is-running' : '');
-    
-    const timeStr = formatRelativeTime(c.updated_at || c.created_at);
-    item.innerHTML = `
-      <span class="history-title" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</span>
-      <div class="history-meta-row">
-        ${isRunning ? `
-          <span class="history-status-badge status-running">
-            <span class="status-pulse-dot"></span> 运行中
-          </span>
-        ` : `
-          <span class="history-status-badge status-completed">
-            <span class="status-check-icon">✓</span> 已完成
-          </span>
-        `}
-        <span class="history-time">${timeStr}</span>
+    let gKey = c.workspace_id || 'unclassified';
+    if (c.workspace_path) {
+      const reg = state.workspaces.find(w => pathResolve(w.path) === pathResolve(c.workspace_path));
+      if (reg) gKey = reg.id;
+    }
+
+    if (!groupsMap.has(gKey)) {
+      const isCurrent = (curId && gKey === curId) || (curPath && c.workspace_path && pathResolve(c.workspace_path) === curPath);
+      groupsMap.set(gKey, {
+        id: gKey,
+        name: c.workspace_name || (gKey === 'unclassified' ? '其它 / 未分类' : '工作区'),
+        path: c.workspace_path || '',
+        is_current: isCurrent,
+        items: []
+      });
+    }
+
+    groupsMap.get(gKey).items.push(c);
+  });
+
+  const groups = Array.from(groupsMap.values()).filter(g => g.items.length > 0 || g.is_current);
+  groups.sort((a, b) => {
+    if (a.is_current) return -1;
+    if (b.is_current) return 1;
+    if (a.id === 'unclassified') return 1;
+    if (b.id === 'unclassified') return -1;
+    const aTime = a.items[0]?.updated_at ? new Date(a.items[0].updated_at) : 0;
+    const bTime = b.items[0]?.updated_at ? new Date(b.items[0].updated_at) : 0;
+    return bTime - aTime;
+  });
+
+  groups.forEach(group => {
+    let isCollapsed = false;
+    if (group.is_current) {
+      isCollapsed = state.collapsedWsGroups.has(group.id);
+    } else {
+      isCollapsed = !state.expandedWsGroups?.has(group.id);
+    }
+
+    const groupEl = document.createElement('div');
+    groupEl.className = 'history-group' + (isCollapsed ? ' collapsed' : '');
+    groupEl.dataset.wsId = group.id;
+
+    groupEl.innerHTML = `
+      <div class="history-group-header ${group.is_current ? 'is-current' : ''}">
+        <div class="group-header-left">
+          <svg class="group-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          <span class="group-icon">📁</span>
+          <span class="group-title" title="${escapeHtml(group.name)}">${escapeHtml(group.name)}</span>
+          ${group.is_current ? '<span class="group-active-tag">当前</span>' : ''}
+          <span class="group-count">${group.items.length}</span>
+        </div>
+        <div class="group-header-right">
+          ${group.id !== 'unclassified' ? `
+            <button class="group-rename-btn" title="重命名此工作区">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          ` : ''}
+        </div>
       </div>
+      <div class="history-group-items"></div>
     `;
 
-    item.addEventListener('click', () => switchConversation(c.id, c.title));
-    el.historyList.appendChild(item);
+    // Toggle collapse
+    const headerEl = groupEl.querySelector('.history-group-header');
+    headerEl.addEventListener('click', (e) => {
+      if (e.target.closest('.group-rename-btn')) return;
+      groupEl.classList.toggle('collapsed');
+      const nowCollapsed = groupEl.classList.contains('collapsed');
+      if (!state.expandedWsGroups) state.expandedWsGroups = new Set();
+      if (nowCollapsed) {
+        state.collapsedWsGroups.add(group.id);
+        state.expandedWsGroups.delete(group.id);
+      } else {
+        state.collapsedWsGroups.delete(group.id);
+        state.expandedWsGroups.add(group.id);
+      }
+      localStorage.setItem('agy_collapsed_ws_groups', JSON.stringify(Array.from(state.collapsedWsGroups)));
+      localStorage.setItem('agy_expanded_ws_groups', JSON.stringify(Array.from(state.expandedWsGroups)));
+    });
+
+    // Rename workspace button
+    const renameBtn = groupEl.querySelector('.group-rename-btn');
+    if (renameBtn) {
+      renameBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openRenameWorkspaceModal(group);
+      });
+    }
+
+    // Append items
+    const itemsContainer = groupEl.querySelector('.history-group-items');
+    if (group.items.length === 0) {
+      const emptyNote = document.createElement('div');
+      emptyNote.style.cssText = 'padding: 6px 8px; color: var(--text-dim); font-size: 11px;';
+      emptyNote.textContent = '暂无历史会话';
+      itemsContainer.appendChild(emptyNote);
+    } else {
+      group.items.forEach(c => {
+        itemsContainer.appendChild(createHistoryItemElement(c));
+      });
+    }
+
+    el.historyList.appendChild(groupEl);
   });
 }
 
@@ -820,7 +2491,18 @@ function showSessionContainer(convId) {
   if (!convId) {
     state.sessionContainers.forEach(c => c.classList.add('hidden'));
     el.messagesList.classList.add('hidden');
-    el.welcomeView.classList.remove('hidden');
+    if (el.welcomeView) el.welcomeView.classList.remove('hidden');
+    if (state.currentWorkspace) {
+      const wsTextEl = document.getElementById('welcomeWsBadgeText');
+      if (wsTextEl) {
+        wsTextEl.textContent = state.currentWorkspace.name || state.currentWorkspace.path || '';
+      } else if (el.welcomeWsBadge) {
+        el.welcomeWsBadge.textContent = state.currentWorkspace.name ? `📁 ${state.currentWorkspace.name}` : `📁 ${state.currentWorkspace.path}`;
+      }
+      if (el.welcomeWsBadge) {
+        el.welcomeWsBadge.title = `工作区路径: ${state.currentWorkspace.path || ''} (点击切换)`;
+      }
+    }
     return;
   }
 
@@ -836,55 +2518,73 @@ function showSessionContainer(convId) {
   });
 }
 
+// Update Navbar Session Title & Breadcrumb state
+function updateNavbarSessionTitle(title) {
+  const isNew = !title || title === '新会话' || !state.currentConversationId;
+  if (el.navbarBreadcrumbs) {
+    if (isNew) {
+      el.navbarBreadcrumbs.classList.add('is-new-session');
+    } else {
+      el.navbarBreadcrumbs.classList.remove('is-new-session');
+    }
+  }
+  if (el.sessionTitle) {
+    el.sessionTitle.textContent = title || '新会话';
+  }
+}
+
 // Switch Conversation (随时进入之前或正在运行的会话)
 async function switchConversation(convId, title) {
+  if (window.innerWidth <= 768) {
+    closeSidebar();
+  }
   state.currentConversationId = convId;
-  el.sessionTitle.textContent = title || '历史会话';
+  updateNavbarSessionTitle(title || '历史会话');
   
   const container = getOrCreateSessionContainer(convId);
   showSessionContainer(convId);
   renderConversationsList();
   updateGeneratingUI();
 
-  // 若容器内已有内容（无论是正在实时流式输出，还是已加载历史），直接恢复展示即可
-  if (container.children.length > 0) {
+  // 若容器内已有内容，且该会话非运行中状态，直接恢复展示
+  if (container.children.length > 0 && !state.runningSessionIds.has(convId)) {
     scrollToBottom();
     return;
   }
 
-  // 否则从后端拉取历史记录
+  // 否则从后端拉取历史记录 / 同步最新后台执行进度
   try {
-    container.innerHTML = '<div class="loading-state" style="padding: 24px; text-align: center; color: var(--text-dim);">加载记录中...</div>';
+    if (container.children.length === 0) {
+      container.innerHTML = '<div class="loading-state" style="padding: 24px; text-align: center; color: var(--text-dim);">加载记录中...</div>';
+    }
     const res = await fetch(`/api/conversations/${convId}`);
     if (!res.ok) throw new Error('Failed to load conversation');
     const data = await res.json();
 
-    container.innerHTML = '';
-    if (Array.isArray(data.messages)) {
-      data.messages.forEach(msg => {
-        appendMessage(msg.role, msg.content, {
-          thinking: msg.thinking,
-          tool_calls: msg.tool_calls,
-          timestamp: msg.timestamp
-        }, container);
-      });
+    renderConversationMessages(container, data.messages);
+    if (data.is_running) {
+      ensureTypingCursor(container);
     }
-
     scrollToBottom();
   } catch (err) {
-    container.innerHTML = `<div class="tool-badge error" style="margin: 16px;">加载会话失败: ${escapeHtml(err.message)}</div>`;
+    if (container.children.length === 0) {
+      container.innerHTML = `<div class="tool-badge error" style="margin: 16px;">加载会话失败: ${escapeHtml(err.message)}</div>`;
+    }
   }
 }
 
 // Start New Chat (随时新建会话，不影响后台正在运行的其他会话)
 function startNewChat() {
   state.currentConversationId = null;
-  el.sessionTitle.textContent = '新会话';
+  updateNavbarSessionTitle('新会话');
   showSessionContainer(null);
   el.promptInput.value = '';
   el.promptInput.focus();
   renderConversationsList();
   updateGeneratingUI();
+  if (window.innerWidth <= 768) {
+    closeSidebar();
+  }
 }
 
 // --- Send Message & Concurrent Multi-Session Stream ---
@@ -904,7 +2604,7 @@ async function sendMessage() {
 
   if (isNewSession) {
     state.currentConversationId = tempId;
-    el.sessionTitle.textContent = prompt.slice(0, 24) || '新任务';
+    updateNavbarSessionTitle(prompt.slice(0, 24) || '新任务');
 
     // 乐观插入侧边栏并标记为「运行中」
     state.conversations.unshift({
@@ -930,6 +2630,9 @@ async function sendMessage() {
   state.attachedImages = [];
   el.imagePreviewBar.innerHTML = '';
   el.imagePreviewBar.classList.add('hidden');
+  if (window.innerWidth <= 768) {
+    el.promptInput.blur(); // Dismiss mobile soft keyboard
+  }
 
   // 在该会话容器中创建 Agent 回复容器与打字光标
   const assistantMsgObj = createAssistantMessageContainer(container);
@@ -943,7 +2646,10 @@ async function sendMessage() {
     currentStreamMessage: assistantMsgObj,
     currentToolsMap: new Map(),
     abortController: abortController,
-    statusText: '正在连接智能体...'
+    statusText: '正在连接智能体...',
+    prompt: prompt,
+    workspace: currentWs,
+    images: images
   };
 
   state.activeSessions.set(state.currentConversationId, sessionContext);
@@ -1016,8 +2722,15 @@ async function runSessionStream(session, prompt, workspace, convIdToSend, images
       }
     }
   } catch (err) {
-    if (err.name !== 'AbortError') {
-      console.error('Session stream error:', err);
+    if (err.name !== 'AbortError' && !session.isUserAborted) {
+      console.warn('Session stream interrupted or backgrounded:', err);
+
+      // 尝试后台无感恢复轮询（手机端切后台、锁屏、临时断网等场景）
+      const recovered = await handleBackgroundRecovery(session);
+      if (recovered) {
+        return; // 后台任务已无缝同步完成
+      }
+
       if (session.currentStreamMessage) {
         const errorDiv = document.createElement('div');
         errorDiv.className = 'tool-badge error';
@@ -1025,16 +2738,21 @@ async function runSessionStream(session, prompt, workspace, convIdToSend, images
         errorDiv.textContent = `执行异常: ${err.message}`;
         session.currentStreamMessage.bodyEl.appendChild(errorDiv);
       }
+      if (/RESOURCE_EXHAUSTED|quota exceeded|Rate limit|Too Many Requests|429|exceeded your current quota|Capacity exhausted/i.test(err.message)) {
+        showQuotaExhaustedCard(session, err.message);
+      }
     }
   } finally {
-    state.runningSessionIds.delete(session.sessionId);
-    if (session.tempId) {
-      state.runningSessionIds.delete(session.tempId);
+    if (!session.inBackgroundRecovery) {
+      state.runningSessionIds.delete(session.sessionId);
+      if (session.tempId) {
+        state.runningSessionIds.delete(session.tempId);
+      }
+      state.activeSessions.delete(session.sessionId);
+      removeTypingCursor(session.container);
+      updateGeneratingUI();
+      loadConversations(true);
     }
-    state.activeSessions.delete(session.sessionId);
-    removeTypingCursor(session.container);
-    updateGeneratingUI();
-    loadConversations(true);
   }
 }
 
@@ -1097,10 +2815,19 @@ function handleStreamEventForSession(session, event, data) {
       updateGeneratingUI();
     }
     loadConversations(true);
+  } else if (event === 'quota_exhausted') {
+    session.statusText = '额度已耗尽，请快捷切换账号';
+    if (state.currentConversationId === session.sessionId) {
+      updateStatus(session.statusText);
+    }
+    showQuotaExhaustedCard(session, data.message || '当前账号额度已耗尽');
   } else if (event === 'error') {
     session.statusText = `错误: ${data.error}`;
     if (state.currentConversationId === session.sessionId) {
       updateStatus(session.statusText);
+    }
+    if (/RESOURCE_EXHAUSTED|quota exceeded|Rate limit|Too Many Requests|429|exceeded your current quota|Capacity exhausted/i.test(data.error || '')) {
+      showQuotaExhaustedCard(session, data.error);
     }
   }
 }
@@ -1137,6 +2864,9 @@ function handleStepEventForSession(session, step) {
 
   // 3. Agent Response Text Delta
   if (step.step_type === 'agent_response' && step.text_delta) {
+    if (msgObj.thinkingEl && typeof msgObj.thinkingEl.finalize === 'function') {
+      msgObj.thinkingEl.finalize();
+    }
     msgObj.rawText += step.text_delta;
     msgObj.textEl.innerHTML = renderMarkdown(msgObj.rawText);
     ensureTypingCursor(msgObj.textEl);
@@ -1153,8 +2883,11 @@ async function stopAgentExecution() {
     updateStatus('正在中断智能体执行...');
     
     const active = state.activeSessions.get(currentId);
-    if (active && active.abortController) {
-      active.abortController.abort();
+    if (active) {
+      active.isUserAborted = true;
+      if (active.abortController) {
+        active.abortController.abort();
+      }
     }
 
     await fetch('/api/chat/stop', {
@@ -1178,15 +2911,7 @@ function createAssistantMessageContainer(targetContainer = null) {
   const row = document.createElement('div');
   row.className = 'message-row assistant';
 
-  row.innerHTML = `
-    <div class="message-avatar">AI</div>
-    <div class="message-content">
-      <div class="message-author">Antigravity Agent</div>
-      <div class="message-body markdown-body">
-        <div class="response-text"></div>
-      </div>
-    </div>
-  `;
+  row.innerHTML = `<div class="message-avatar">AI</div><div class="message-content"><div class="message-author">Antigravity Agent</div><div class="message-body markdown-body"><div class="response-text"></div></div></div>`;
 
   container.appendChild(row);
   const textEl = row.querySelector('.response-text');
@@ -1199,6 +2924,11 @@ function createAssistantMessageContainer(targetContainer = null) {
     rawText: '',
     thinkingEl: null
   };
+}
+
+function cleanThinkingText(text) {
+  if (!text) return '';
+  return text.trim().replace(/\n{3,}/g, '\n\n');
 }
 
 function createThinkingBox() {
@@ -1225,6 +2955,9 @@ function createThinkingBox() {
     contentEl: content,
     append: (text) => {
       content.textContent += text;
+    },
+    finalize: () => {
+      content.textContent = cleanThinkingText(content.textContent);
     }
   };
 }
@@ -1306,24 +3039,11 @@ function appendMessage(role, content, extra = {}, targetContainer = null) {
   const avatar = role === 'user' ? 'U' : 'AI';
   const author = role === 'user' ? '你' : 'Antigravity Agent';
 
-  let innerHtml = `
-    <div class="message-avatar">${avatar}</div>
-    <div class="message-content">
-      <div class="message-author">${author}</div>
-      <div class="message-body ${role === 'assistant' ? 'markdown-body' : ''}">
-  `;
+  let innerHtml = `<div class="message-avatar">${avatar}</div><div class="message-content"><div class="message-author">${author}</div><div class="message-body ${role === 'assistant' ? 'markdown-body' : ''}">`;
 
   // Assistant thinking block if present
   if (extra.thinking) {
-    innerHtml += `
-      <div class="thinking-block">
-        <div class="thinking-header">
-          <span class="thinking-title">💭 思考过程 (Thinking Process)</span>
-          <span class="btn-icon-sm">▼</span>
-        </div>
-        <div class="thinking-content">${escapeHtml(extra.thinking)}</div>
-      </div>
-    `;
+    innerHtml += `<div class="thinking-block"><div class="thinking-header"><span class="thinking-title">💭 思考过程 (Thinking Process)</span><span class="btn-icon-sm">▼</span></div><div class="thinking-content">${escapeHtml(cleanThinkingText(extra.thinking))}</div></div>`;
   }
 
   // Render attached files/images if any
@@ -1349,10 +3069,11 @@ function appendMessage(role, content, extra = {}, targetContainer = null) {
     innerHtml += `</div>`;
   }
 
+  const cleanText = (content || '').trim();
   if (role === 'assistant') {
     innerHtml += `<div class="response-text">${renderMarkdown(content)}</div>`;
   } else {
-    innerHtml += `<div class="response-text">${escapeHtml(content)}</div>`;
+    innerHtml += `<div class="response-text">${escapeHtml(cleanText)}</div>`;
   }
 
   innerHtml += `</div></div>`;
@@ -1371,12 +3092,16 @@ function appendMessage(role, content, extra = {}, targetContainer = null) {
   bindCopyCodeButtons(row);
 }
 
-function ensureTypingCursor(textEl) {
-  let cursor = textEl.querySelector('.typing-cursor');
+function ensureTypingCursor(targetEl) {
+  if (!targetEl) return;
+  const textTarget = targetEl.classList?.contains('response-text') 
+    ? targetEl 
+    : (targetEl.querySelector?.('.message-row.assistant:last-child .response-text') || targetEl);
+  let cursor = textTarget.querySelector?.('.typing-cursor');
   if (!cursor) {
     cursor = document.createElement('span');
     cursor.className = 'typing-cursor';
-    textEl.appendChild(cursor);
+    textTarget.appendChild(cursor);
   }
 }
 
@@ -1428,8 +3153,626 @@ function scrollToBottom() {
   });
 }
 
+// --- Model & Reasoning Effort Cascader Logic ---
+const MODEL_FAMILIES_FALLBACK = [
+  {
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash',
+    tag: '推荐',
+    icon: '⚡',
+    description: '新一代极速主力模型，强悍推理',
+    efforts: [
+      { id: 'gemini-3.8-flash-high', effort: 'high', label: '高思考 (深度推理)', desc: '复杂逻辑推导与大工程代码重构', default: true },
+      { id: 'gemini-3.8-flash-medium', effort: 'medium', label: '中思考 (均衡模式)', desc: '平衡响应速度与日常编程任务' },
+      { id: 'gemini-3.8-flash-low', effort: 'low', label: '低思考 (极速响应)', desc: '毫秒级响应，简单问答与快速处理' }
+    ]
+  },
+  {
+    id: 'gemini-3.7-flash',
+    name: 'Gemini 3.7 Flash',
+    icon: '⚡',
+    description: '轻快灵活的大语言模型',
+    efforts: [
+      { id: 'gemini-3.7-flash-high', effort: 'high', label: '高思考 (深度推理)', desc: '多步骤深度思考推理' },
+      { id: 'gemini-3.7-flash-medium', effort: 'medium', label: '中思考 (均衡模式)', desc: '速度与准确率平衡模式' },
+      { id: 'gemini-3.7-flash-low', effort: 'low', label: '低思考 (极速响应)', desc: '快速低延迟即时响应' }
+    ]
+  },
+  {
+    id: 'gemini-3.6-flash',
+    name: 'Gemini 3.6 Flash',
+    icon: '⚡',
+    description: '稳定代际 Flash',
+    efforts: [
+      { id: 'gemini-3.6-flash-high', effort: 'high', label: '高思考 (深度推理)', desc: '长上下文稳定深度推理' },
+      { id: 'gemini-3.6-flash-medium', effort: 'medium', label: '中思考 (均衡模式)', desc: '标准均衡执行模式' },
+      { id: 'gemini-3.6-flash-low', effort: 'low', label: '低思考 (极速响应)', desc: '快速响应模式' }
+    ]
+  },
+  {
+    id: 'gemini-3.1-pro',
+    name: 'Gemini 3.1 Pro',
+    tag: '旗舰',
+    icon: '🧠',
+    description: 'Google 旗舰级多模态推理大模型',
+    efforts: [
+      { id: 'gemini-3.1-pro-high', effort: 'high', label: '高思考 (深度推理)', desc: '顶级算法推导、数学证明与高难度逻辑' },
+      { id: 'gemini-3.1-pro-low', effort: 'low', label: '低思考 (极速响应)', desc: '轻量低延迟快速推理' }
+    ]
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
+    tag: 'Anthropic',
+    icon: '🟣',
+    description: 'Anthropic 顶尖编程推理模型',
+    efforts: [
+      { id: 'claude-sonnet-4-6', effort: 'high', label: '内置深度思考 (代码推理)', desc: '卓越的系统架构设计与严谨代码审查' }
+    ]
+  },
+  {
+    id: 'claude-opus-4-6-thinking',
+    name: 'Claude Opus 4.6',
+    tag: 'Anthropic',
+    icon: '🟣',
+    description: 'Anthropic 旗舰超级模型',
+    efforts: [
+      { id: 'claude-opus-4-6-thinking', effort: 'high', label: '内置深度思考 (顶级推理)', desc: '最深邃的认知推理与复杂长程推导' }
+    ]
+  },
+  {
+    id: 'gpt-oss-120b-medium',
+    name: 'GPT-OSS 120B',
+    tag: '开源',
+    icon: '🟢',
+    description: '开源 120B 稠密大模型',
+    efforts: [
+      { id: 'gpt-oss-120b-medium', effort: 'medium', label: '中思考 (均衡模式)', desc: '开源高性价比平衡推理' }
+    ]
+  }
+];
+
+function findFamilyByModelId(modelId) {
+  const families = state.modelFamilies?.length > 0 ? state.modelFamilies : MODEL_FAMILIES_FALLBACK;
+  for (const fam of families) {
+    if (fam.efforts.some(e => e.id === modelId)) {
+      return fam;
+    }
+  }
+  return null;
+}
+
+function findEffortByModelId(modelId) {
+  const families = state.modelFamilies?.length > 0 ? state.modelFamilies : MODEL_FAMILIES_FALLBACK;
+  for (const fam of families) {
+    const found = fam.efforts.find(e => e.id === modelId);
+    if (found) return found;
+  }
+  return null;
+}
+
+function toggleModelCascader() {
+  if (!el.modelCascaderPopover) return;
+  const isHidden = el.modelCascaderPopover.classList.contains('hidden');
+  if (isHidden) {
+    openModelCascader();
+  } else {
+    closeModelCascader();
+  }
+}
+
+function openModelCascader() {
+  if (!el.modelCascaderPopover) return;
+  el.modelCascaderPopover.classList.remove('hidden');
+  if (el.modelCascaderBackdrop) el.modelCascaderBackdrop.classList.remove('hidden');
+  if (el.modelCascaderTrigger) el.modelCascaderTrigger.classList.add('open');
+
+  updateModeCardsDisplay();
+
+  const curFam = findFamilyByModelId(state.activeModel);
+  const families = state.modelFamilies?.length > 0 ? state.modelFamilies : MODEL_FAMILIES_FALLBACK;
+  state.hoveredFamilyId = curFam ? curFam.id : (families[0]?.id || 'gemini-3.8-flash');
+
+  renderModelFamiliesList();
+  renderModelEffortsList(state.hoveredFamilyId);
+}
+
+function closeModelCascader() {
+  if (!el.modelCascaderPopover) return;
+  el.modelCascaderPopover.classList.add('hidden');
+  if (el.modelCascaderBackdrop) el.modelCascaderBackdrop.classList.add('hidden');
+  if (el.modelCascaderTrigger) el.modelCascaderTrigger.classList.remove('open');
+}
+
+function renderModelFamiliesList() {
+  if (!el.modelFamiliesList) return;
+  el.modelFamiliesList.innerHTML = '';
+
+  const families = state.modelFamilies?.length > 0 ? state.modelFamilies : MODEL_FAMILIES_FALLBACK;
+  const activeFam = findFamilyByModelId(state.activeModel);
+
+  families.forEach(fam => {
+    const item = document.createElement('div');
+    const isHovered = fam.id === state.hoveredFamilyId;
+    const isActive = activeFam && activeFam.id === fam.id;
+
+    item.className = `model-family-item ${isHovered ? 'hovered' : ''} ${isActive ? 'active' : ''}`;
+
+    let badgeClass = 'badge-primary';
+    if (fam.tag === 'Pro') badgeClass = 'badge-purple';
+    else if (fam.tag === 'Anthropic') badgeClass = 'badge-orange';
+    else if (fam.tag === '开源') badgeClass = 'badge-green';
+
+    item.innerHTML = `
+      <div class="model-family-left">
+        <span class="model-family-icon">${fam.icon || '⚡'}</span>
+        <span class="model-family-name">${escapeHtml(fam.name)}</span>
+      </div>
+      <div class="model-family-right">
+        ${fam.tag ? `<span class="model-family-badge ${badgeClass}">${escapeHtml(fam.tag)}</span>` : ''}
+        <span class="model-family-arrow">›</span>
+      </div>
+    `;
+
+    // Mouseenter (Hover): updates hovered family and renders effort list
+    item.addEventListener('mouseenter', () => {
+      state.hoveredFamilyId = fam.id;
+      document.querySelectorAll('.model-family-item').forEach(i => i.classList.remove('hovered'));
+      item.classList.add('hovered');
+      renderModelEffortsList(fam.id);
+    });
+
+    // Click: if only 1 effort option, select it directly; otherwise hover it
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.hoveredFamilyId = fam.id;
+      document.querySelectorAll('.model-family-item').forEach(i => i.classList.remove('hovered'));
+      item.classList.add('hovered');
+      renderModelEffortsList(fam.id);
+      if (fam.efforts.length === 1) {
+        selectModelAndEffort(fam, fam.efforts[0]);
+      }
+    });
+
+    el.modelFamiliesList.appendChild(item);
+  });
+}
+
+function renderModelEffortsList(familyId) {
+  if (!el.modelEffortsList) return;
+  el.modelEffortsList.innerHTML = '';
+
+  const families = state.modelFamilies?.length > 0 ? state.modelFamilies : MODEL_FAMILIES_FALLBACK;
+  const fam = families.find(f => f.id === familyId);
+  if (!fam) return;
+
+  if (el.modelEffortsHeader) {
+    el.modelEffortsHeader.textContent = `${fam.name} · 思考强度`;
+  }
+
+  fam.efforts.forEach(eff => {
+    const item = document.createElement('div');
+    const isSelected = state.activeModel === eff.id;
+
+    item.className = `model-effort-item ${isSelected ? 'selected' : ''}`;
+
+    let effortIcon = '🧠';
+    if (eff.effort === 'medium') effortIcon = '⚖️';
+    else if (eff.effort === 'low') effortIcon = '🚀';
+    else if (fam.id.startsWith('claude')) effortIcon = '🟣';
+
+    item.innerHTML = `
+      <div class="effort-item-left">
+        <div class="effort-item-title">
+          <span>${effortIcon}</span>
+          <span>${escapeHtml(eff.label)}</span>
+        </div>
+        ${eff.desc ? `<div class="effort-item-desc">${escapeHtml(eff.desc)}</div>` : ''}
+      </div>
+      ${isSelected ? '<span class="effort-check-icon">✓</span>' : ''}
+    `;
+
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectModelAndEffort(fam, eff);
+    });
+
+    el.modelEffortsList.appendChild(item);
+  });
+}
+
+function selectModelAndEffort(family, effort) {
+  state.activeModel = effort.id;
+  state.activeEffort = effort.effort;
+
+  localStorage.setItem('agy_model', state.activeModel);
+  localStorage.setItem('agy_effort', state.activeEffort);
+
+  // Sync hidden selects
+  if (el.modelSelect) el.modelSelect.value = state.activeModel;
+  if (el.effortSelect) el.effortSelect.value = state.activeEffort;
+
+  updateModelTriggerDisplay(family, effort);
+  closeModelCascader();
+  showToast(`已选择模型：${family ? family.name : state.activeModel} · ${effort ? effort.label : ''}`, 'success', 2200);
+}
+
+function setExecutionMode(mode) {
+  state.activeMode = mode;
+  localStorage.setItem('agy_mode', mode);
+  if (el.modeSelect) el.modeSelect.value = mode;
+  updateModeCardsDisplay();
+  updateModelTriggerDisplay();
+}
+
+function updateModeCardsDisplay() {
+  const isPlan = state.activeMode === 'plan';
+  if (el.modeCardAccept) el.modeCardAccept.classList.toggle('active', !isPlan);
+  if (el.modeCardPlan) el.modeCardPlan.classList.toggle('active', isPlan);
+}
+
+function updateModelTriggerDisplay(family, effort) {
+  if (!family || !effort) {
+    family = findFamilyByModelId(state.activeModel);
+    effort = findEffortByModelId(state.activeModel);
+  }
+  if (el.modelTriggerName) {
+    el.modelTriggerName.textContent = family ? family.name : state.activeModel;
+    el.modelTriggerName.title = family ? family.name : state.activeModel;
+  }
+  if (el.modelTriggerEffort) {
+    let effortText = effort ? effort.label : `思考: ${state.activeEffort}`;
+    if (window.innerWidth <= 768) {
+      effortText = effortText.replace(/\s*\([^)]*\)/, '');
+    }
+    el.modelTriggerEffort.textContent = effortText;
+    el.modelTriggerEffort.title = effort ? `${effort.label} - ${effort.desc || ''}` : '';
+  }
+  if (el.modelTriggerMode) {
+    const isPlan = state.activeMode === 'plan';
+    el.modelTriggerMode.textContent = isPlan ? '仅规划' : '自动执行';
+    el.modelTriggerMode.className = `model-trigger-mode ${isPlan ? 'mode-plan' : 'mode-accept'}`;
+    el.modelTriggerMode.title = isPlan ? '当前模式：仅制定规划方案，不自动修改文件' : '当前模式：自动分析、修改代码并执行命令';
+  }
+
+  // Sync Mobile Top Navbar Model Pill
+  if (el.mobileNavModelName) {
+    el.mobileNavModelName.textContent = family ? family.name : state.activeModel;
+  }
+  if (el.mobileNavModelEffort) {
+    let effortText = effort ? effort.label : `思考: ${state.activeEffort}`;
+    effortText = effortText.replace(/\s*\([^)]*\)/, '');
+    el.mobileNavModelEffort.textContent = effortText;
+  }
+
+  // Sync Mobile Composer Mode Chip
+  if (el.composerModeText) {
+    const isPlan = state.activeMode === 'plan';
+    el.composerModeText.textContent = isPlan ? '📋 仅规划' : '⚡ 自动执行';
+    if (el.composerModeToggleBtn) {
+      el.composerModeToggleBtn.classList.toggle('mode-plan', isPlan);
+    }
+  }
+
+  // Sync Settings Modal Summary
+  if (el.settingsModelSummary) {
+    const fName = family ? family.name : state.activeModel;
+    const eLabel = effort ? effort.label : state.activeEffort;
+    el.settingsModelSummary.textContent = `${fName} · ${eLabel}`;
+  }
+  const isPlan = state.activeMode === 'plan';
+  if (el.settingsModeAccept) el.settingsModeAccept.classList.toggle('active', !isPlan);
+  if (el.settingsModePlan) el.settingsModePlan.classList.toggle('active', isPlan);
+}
+
+function renderConversationMessages(container, messages) {
+  if (!container) return;
+  container.innerHTML = '';
+  if (Array.isArray(messages)) {
+    messages.forEach(msg => {
+      appendMessage(msg.role, msg.content, {
+        thinking: msg.thinking,
+        tool_calls: msg.tool_calls,
+        timestamp: msg.timestamp
+      }, container);
+    });
+  }
+}
+
+async function handleBackgroundRecovery(session) {
+  if (session.isUserAborted) return false;
+  const convId = session.sessionId;
+  if (!convId || convId.startsWith('sess_')) return false;
+
+  session.inBackgroundRecovery = true;
+  session.statusText = '后台持续执行中 · 正在保持同步...';
+  if (state.currentConversationId === convId) {
+    updateStatus(session.statusText);
+  }
+
+  const startTime = Date.now();
+  const maxTimeout = 20 * 60 * 1000; // 20分钟超时
+
+  while (Date.now() - startTime < maxTimeout) {
+    if (session.isUserAborted) {
+      session.inBackgroundRecovery = false;
+      return false;
+    }
+
+    try {
+      const res = await fetch(`/api/conversations/${convId}`);
+      if (res.ok) {
+        const data = await res.json();
+
+        // 持续同步最新收到的消息和执行结果
+        if (Array.isArray(data.messages) && data.messages.length > 0) {
+          renderConversationMessages(session.container, data.messages);
+        }
+
+        if (!data.is_running) {
+          // 后端进程已执行完成
+          session.inBackgroundRecovery = false;
+          session.statusText = '执行完成';
+          state.runningSessionIds.delete(convId);
+          if (session.tempId) state.runningSessionIds.delete(session.tempId);
+          state.activeSessions.delete(convId);
+          removeTypingCursor(session.container);
+
+          if (state.currentConversationId === convId) {
+            updateStatus('执行完成');
+            updateGeneratingUI();
+            scrollToBottom();
+          }
+          loadConversations(true);
+          return true;
+        } else {
+          // 仍在后端执行中
+          ensureTypingCursor(session.container);
+          session.statusText = `智能体后台执行中 (已推进 ${data.total_steps || 0} 步)...`;
+          if (state.currentConversationId === convId) {
+            updateStatus(session.statusText);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Background sync poll error:', e);
+    }
+
+    await new Promise(r => setTimeout(r, 2000));
+  }
+
+  session.inBackgroundRecovery = false;
+  return false;
+}
+
+async function syncForegroundOnResume() {
+  loadConversations(true);
+
+  const currentId = state.currentConversationId;
+  if (!currentId || currentId.startsWith('sess_')) return;
+
+  try {
+    const res = await fetch(`/api/conversations/${currentId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const container = getOrCreateSessionContainer(currentId);
+
+    if (!data.is_running) {
+      if (state.runningSessionIds.has(currentId)) {
+        state.runningSessionIds.delete(currentId);
+        state.activeSessions.delete(currentId);
+        removeTypingCursor(container);
+        renderConversationMessages(container, data.messages);
+        updateStatus('执行完成');
+        updateGeneratingUI();
+        scrollToBottom();
+      }
+    } else {
+      if (Array.isArray(data.messages) && data.messages.length > 0) {
+        renderConversationMessages(container, data.messages);
+      }
+      ensureTypingCursor(container);
+      updateStatus(`智能体后台执行中 (已推进 ${data.total_steps || 0} 步)...`);
+      updateGeneratingUI();
+    }
+  } catch (err) {
+    console.warn('syncForegroundOnResume error:', err);
+  }
+}
+
+// --- Server Directory Picker Modal & Logic ---
+let dirPickerCurrentDir = '/';
+let dirPickerParentDir = null;
+let dirPickerRawList = [];
+let dirPickerSelectedPath = '';
+
+function openDirPickerModal(startDir) {
+  if (window.innerWidth <= 768) closeSidebar();
+  let target = (startDir || '').trim();
+  if (!target) {
+    target = state.currentWorkspace?.path ? state.currentWorkspace.path : '/opt/1panel/www/sites';
+  }
+  if (el.dirPickerModal) {
+    el.dirPickerModal.classList.remove('hidden');
+    if (el.dirFilterInput) el.dirFilterInput.value = '';
+    loadServerDirectories(target);
+  }
+}
+
+function closeDirPickerModal() {
+  if (el.dirPickerModal) {
+    el.dirPickerModal.classList.add('hidden');
+  }
+}
+
+async function loadServerDirectories(dirPath) {
+  if (!el.dirListContainer) return;
+  el.dirListContainer.innerHTML = '<div class="dir-list-loading">正在读取服务器目录...</div>';
+  
+  try {
+    const res = await fetch(`/api/workspaces/browse?dir=${encodeURIComponent(dirPath)}`);
+    const data = await res.json();
+    
+    if (!res.ok || data.error) {
+      el.dirListContainer.innerHTML = `
+        <div class="dir-list-error">
+          <div>无法访问目录：${escapeHtml(data.error || '未知错误')}</div>
+          <div style="margin-top:10px; display:flex; gap:8px; justify-content:center;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnFallbackRoot">前往根目录 /</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnFallbackOpt">前往 /opt</button>
+          </div>
+        </div>
+      `;
+      const btnRoot = document.getElementById('btnFallbackRoot');
+      const btnOpt = document.getElementById('btnFallbackOpt');
+      if (btnRoot) btnRoot.addEventListener('click', () => loadServerDirectories('/'));
+      if (btnOpt) btnOpt.addEventListener('click', () => loadServerDirectories('/opt'));
+      return;
+    }
+
+    dirPickerCurrentDir = data.current || dirPath;
+    dirPickerParentDir = data.parent;
+    dirPickerRawList = data.directories || [];
+    dirPickerSelectedPath = dirPickerCurrentDir;
+
+    if (el.dirSelectedPathPreview) {
+      el.dirSelectedPathPreview.textContent = dirPickerSelectedPath;
+    }
+
+    if (el.dirNavUpBtn) {
+      el.dirNavUpBtn.disabled = !data.parent || data.is_root;
+    }
+
+    renderDirBreadcrumb(dirPickerCurrentDir);
+    renderDirList();
+  } catch (err) {
+    el.dirListContainer.innerHTML = `<div class="dir-list-error">请求失败: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderDirBreadcrumb(fullPath) {
+  if (!el.dirBreadcrumb) return;
+  el.dirBreadcrumb.innerHTML = '';
+
+  const parts = fullPath.split('/').filter(Boolean);
+  
+  // Root item
+  const rootSpan = document.createElement('span');
+  rootSpan.className = 'dir-crumb-item' + (parts.length === 0 ? ' active' : '');
+  rootSpan.textContent = '/ (根)';
+  rootSpan.title = '根目录 /';
+  rootSpan.addEventListener('click', () => {
+    if (dirPickerCurrentDir !== '/') loadServerDirectories('/');
+  });
+  el.dirBreadcrumb.appendChild(rootSpan);
+
+  let accumulated = '';
+  parts.forEach((part, idx) => {
+    accumulated += '/' + part;
+    const currentAcc = accumulated;
+    const isLast = idx === parts.length - 1;
+
+    const sep = document.createElement('span');
+    sep.className = 'dir-crumb-sep';
+    sep.textContent = '>';
+    el.dirBreadcrumb.appendChild(sep);
+
+    const crumb = document.createElement('span');
+    crumb.className = 'dir-crumb-item' + (isLast ? ' active' : '');
+    crumb.textContent = part;
+    crumb.title = currentAcc;
+    if (!isLast) {
+      crumb.addEventListener('click', () => loadServerDirectories(currentAcc));
+    }
+    el.dirBreadcrumb.appendChild(crumb);
+  });
+}
+
+function renderDirList() {
+  if (!el.dirListContainer) return;
+  const keyword = (el.dirFilterInput ? el.dirFilterInput.value : '').trim().toLowerCase();
+  
+  const filtered = dirPickerRawList.filter(item => {
+    if (!keyword) return true;
+    return item.name.toLowerCase().includes(keyword);
+  });
+
+  if (filtered.length === 0) {
+    el.dirListContainer.innerHTML = `
+      <div class="dir-list-empty">
+        ${keyword ? '无匹配文件夹' : '当前目录下无子文件夹'}
+      </div>
+    `;
+    return;
+  }
+
+  el.dirListContainer.innerHTML = '';
+  filtered.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'dir-item' + (dirPickerSelectedPath === item.path ? ' selected' : '');
+    
+    row.innerHTML = `
+      <div class="dir-item-left">
+        <span class="dir-item-icon">📁</span>
+        <span class="dir-item-name" title="${escapeHtml(item.path)}">${escapeHtml(item.name)}</span>
+        ${item.is_git ? '<span class="dir-git-badge">Git</span>' : ''}
+      </div>
+      <div class="dir-item-actions">
+        <button type="button" class="dir-enter-btn" title="进入该文件夹">进入 ➔</button>
+      </div>
+    `;
+
+    // Click row: select this directory
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.dir-enter-btn')) return;
+      dirPickerSelectedPath = item.path;
+      if (el.dirSelectedPathPreview) {
+        el.dirSelectedPathPreview.textContent = dirPickerSelectedPath;
+      }
+      document.querySelectorAll('.dir-item').forEach(r => r.classList.remove('selected'));
+      row.classList.add('selected');
+    });
+
+    // Double click row: enter directory
+    row.addEventListener('dblclick', () => {
+      loadServerDirectories(item.path);
+    });
+
+    // Enter button click: enter directory
+    const enterBtn = row.querySelector('.dir-enter-btn');
+    if (enterBtn) {
+      enterBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        loadServerDirectories(item.path);
+      });
+    }
+
+    el.dirListContainer.appendChild(row);
+  });
+}
+
+function confirmDirPickerSelection() {
+  if (!dirPickerSelectedPath) {
+    dirPickerSelectedPath = dirPickerCurrentDir;
+  }
+  if (el.wsInputPath) {
+    el.wsInputPath.value = dirPickerSelectedPath;
+  }
+  // Auto-fill workspace name if empty
+  if (el.wsInputName && !el.wsInputName.value.trim()) {
+    const parts = dirPickerSelectedPath.split('/').filter(Boolean);
+    if (parts.length > 0) {
+      el.wsInputName.value = parts[parts.length - 1];
+    }
+  }
+  closeDirPickerModal();
+  validateWorkspacePathInput();
+}
+
 // --- Workspace Modal & Logic ---
 function openWorkspaceModal() {
+  if (window.innerWidth <= 768) closeSidebar();
   el.addWorkspaceModal.classList.remove('hidden');
   el.wsInputPath.focus();
 }
@@ -1511,6 +3854,17 @@ async function deleteWorkspace(ws) {
     if (state.currentWorkspace?.path === ws.path) {
       if (state.workspaces.length > 0) {
         setWorkspace(state.workspaces[0]);
+      } else {
+        state.currentWorkspace = null;
+        localStorage.removeItem('agy_last_ws');
+        if (el.currentWsName) el.currentWsName.textContent = '未选择工作区';
+        if (el.currentWsPath) {
+          el.currentWsPath.textContent = '';
+          el.currentWsPath.title = '';
+        }
+        if (el.navWsPath) el.navWsPath.textContent = '未选择工作区';
+        if (el.navbarWsPill) el.navbarWsPill.title = '';
+        renderWorkspacesList();
       }
     }
   } catch (err) {
@@ -1560,11 +3914,85 @@ function formatRelativeTime(dateStr) {
   return `${Math.floor(diffSec / 86400)}天前`;
 }
 
-// Lightweight Markdown Renderer with Code Highlighting
+let isMarkedConfigured = false;
+function setupMarked() {
+  if (isMarkedConfigured || typeof marked === 'undefined') return;
+
+  const renderer = new marked.Renderer();
+
+  // Code blocks: ```lang ... ```
+  renderer.code = function(args) {
+    const text = typeof args === 'object' ? args.text : arguments[0];
+    const lang = ((typeof args === 'object' ? args.lang : arguments[1]) || 'text').toLowerCase();
+    const langLabel = lang.toUpperCase();
+    return `
+      <div class="code-block-wrap">
+        <div class="code-block-header">
+          <span>${escapeHtml(langLabel)}</span>
+          <button class="copy-code-btn">复制</button>
+        </div>
+        <pre><code class="language-${escapeHtml(lang)}">${escapeHtml(text)}</code></pre>
+      </div>
+    `;
+  };
+
+  // Links: [text](url)
+  renderer.link = function(args) {
+    const href = typeof args === 'object' ? args.href : arguments[0];
+    const title = typeof args === 'object' ? args.title : arguments[1];
+    const text = typeof args === 'object' ? args.text : arguments[2];
+    const isFile = href && href.startsWith('file://');
+    const icon = isFile ? '<span class="link-file-icon">📄</span> ' : '';
+    return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="md-link ${isFile ? 'md-file-link' : ''}" ${title ? `title="${escapeHtml(title)}"` : ''}>${icon}${text}</a>`;
+  };
+
+  // Blockquotes & GitHub Alerts
+  renderer.blockquote = function(args) {
+    const quote = typeof args === 'object' ? args.text : arguments[0];
+    const alertMatch = quote.match(/^\s*<p>\s*\[\!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<br\s*\/?>)?([\s\S]*?)<\/p>([\s\S]*)$/i);
+    if (alertMatch) {
+      const type = alertMatch[1].toUpperCase();
+      const firstLine = alertMatch[2].trim();
+      const rest = alertMatch[3] || '';
+      const alertMap = {
+        NOTE: { title: '说明', icon: 'ℹ️', cls: 'callout-note' },
+        TIP: { title: '提示', icon: '💡', cls: 'callout-tip' },
+        IMPORTANT: { title: '重要', icon: '📌', cls: 'callout-important' },
+        WARNING: { title: '警告', icon: '⚠️', cls: 'callout-warning' },
+        CAUTION: { title: '注意', icon: '🛑', cls: 'callout-caution' }
+      };
+      const info = alertMap[type] || { title: type, icon: '💡', cls: 'callout-tip' };
+      return `<div class="callout-block ${info.cls}"><div class="callout-title">${info.icon} <span>${info.title}</span></div><div class="callout-body">${firstLine ? `<p>${firstLine}</p>` : ''}${rest}</div></div>`;
+    }
+    return `<blockquote>${quote}</blockquote>`;
+  };
+
+  renderer.hr = function() {
+    return `<hr class="markdown-hr">`;
+  };
+
+  marked.use({ renderer, gfm: true, breaks: false });
+  isMarkedConfigured = true;
+}
+
+// Markdown Renderer with marked.js & Fallback
 function renderMarkdown(md) {
   if (!md) return '';
 
-  let html = md;
+  // Clean excessive empty lines
+  const sanitized = md.replace(/\n{3,}/g, '\n\n');
+
+  if (typeof marked !== 'undefined') {
+    setupMarked();
+    try {
+      return marked.parse(sanitized);
+    } catch (e) {
+      console.warn('marked.parse error, falling back:', e);
+    }
+  }
+
+  // Robust Fallback Renderer if marked is unavailable
+  let html = sanitized;
 
   // Code blocks: ```lang ... ```
   html = html.replace(/```([a-zA-Z0-9_\-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
@@ -1583,10 +4011,19 @@ function renderMarkdown(md) {
   // Inline code: `code`
   html = html.replace(/`([^`\n]+)`/g, '<code>$1</code>');
 
-  // Headers
+  // Headers (h1 to h6)
+  html = html.replace(/^###### (.*$)/gim, '<h6>$1</h6>');
+  html = html.replace(/^##### (.*$)/gim, '<h5>$1</h5>');
+  html = html.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
   html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
   html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
   html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+  // Horizontal rules
+  html = html.replace(/^---$/gim, '<hr class="markdown-hr">');
+
+  // Links: [text](url)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="md-link">$1</a>');
 
   // Blockquotes
   html = html.replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>');
@@ -1613,14 +4050,14 @@ function renderMarkdown(md) {
   });
 
   // Unordered Lists
-  html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+  html = html.replace(/^\s*[-*•]\s+(.*$)/gim, '<li>$1</li>');
+  html = html.replace(/(?:<li>.*?<\/li>\s*)+/gs, match => `<ul>${match}</ul>`);
 
   // Line breaks to paragraphs
   html = html.split('\n\n').map(p => {
     const trimmed = p.trim();
     if (!trimmed) return '';
-    if (trimmed.startsWith('<h') || trimmed.startsWith('<div') || trimmed.startsWith('<ul') || trimmed.startsWith('<table') || trimmed.startsWith('<blockquote')) {
+    if (trimmed.startsWith('<h') || trimmed.startsWith('<div') || trimmed.startsWith('<ul') || trimmed.startsWith('<table') || trimmed.startsWith('<blockquote') || trimmed.startsWith('<hr')) {
       return trimmed;
     }
     return `<p>${trimmed.replace(/\n/g, '<br>')}</p>`;

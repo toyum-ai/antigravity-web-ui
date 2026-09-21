@@ -2,10 +2,10 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Antigravity Web UI · 本地智能体控制台</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/app.css?v=2.6">
 </head>
 <body>
   <div class="app-layout">
@@ -35,7 +35,15 @@
         <div class="workspace-active-card" id="workspaceCard">
           <div class="ws-icon">📁</div>
           <div class="ws-details">
-            <div class="ws-name" id="currentWsName">加载中...</div>
+            <div class="ws-name-row">
+              <div class="ws-name" id="currentWsName">加载中...</div>
+              <button class="btn-icon-xs ws-card-rename-btn" id="renameCurrentWsBtn" title="重命名当前工作区">
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+            </div>
             <div class="ws-path" id="currentWsPath" title="">/opt/1panel/...</div>
           </div>
           <button class="ws-change-btn" id="toggleWsListBtn" title="切换工作区">
@@ -61,8 +69,14 @@
 
       <!-- History Conversations -->
       <div class="sidebar-section history-section">
-        <div class="section-label">
-          <span>历史会话</span>
+        <div class="section-label history-header-label">
+          <div class="history-label-left">
+            <span>历史会话</span>
+            <div class="history-view-tabs" id="historyViewTabs">
+              <button class="history-tab-btn active" id="historyTabAll" title="按工作区分组显示全部历史会话">全部分类</button>
+              <button class="history-tab-btn" id="historyTabCurrent" title="仅查看当前工作区的历史会话">当前工作区</button>
+            </div>
+          </div>
           <button class="btn-icon-sm" id="refreshHistoryBtn" title="刷新历史">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </button>
@@ -74,12 +88,33 @@
 
       <!-- Sidebar Footer Settings -->
       <div class="sidebar-footer">
-        <div class="lan-badge" id="lanBadge" title="局域网访问地址">
+        <div class="sidebar-footer-account" id="sidebarAccountCard" title="点击管理与切换 Google 账号">
+          <div class="account-card-left">
+            <span class="account-card-icon">👤</span>
+            <div class="account-card-info">
+              <span class="account-card-email" id="sidebarAccountEmail">账号加载中...</span>
+              <span class="account-card-sub" id="sidebarAccountSub">点击管理/切换账号</span>
+            </div>
+          </div>
+          <button type="button" class="btn-switch-tag" id="sidebarSwitchAccountBtn">切换</button>
+        </div>
+        <div class="sidebar-settings-action" id="sidebarSettingsBtn" title="打开控制台设置">
+          <span class="settings-action-icon">⚙️</span>
+          <span class="settings-action-text">控制台设置</span>
+        </div>
+        <div class="sidebar-footer-engine">
           <span class="status-dot online"></span>
+          <span class="engine-status-text">Antigravity 引擎在线</span>
+        </div>
+        <div class="lan-badge" id="lanBadge" title="局域网访问地址 · 点击复制">
+          <span class="lan-icon">🌐</span>
           <span class="lan-text" id="lanText">加载中...</span>
         </div>
       </div>
     </aside>
+
+    <!-- Sidebar backdrop for mobile drawer -->
+    <div class="sidebar-backdrop hidden" id="sidebarBackdrop"></div>
 
     <!-- Main Content Area -->
     <main class="main-content">
@@ -89,31 +124,80 @@
           <button class="btn-icon" id="sidebarExpandBtn" title="展开侧边栏">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
-          <div class="active-ws-pill" id="navbarWsPill" title="当前工作区目录">
-            <span class="pill-icon">📁</span>
-            <span class="pill-path" id="navWsPath">工作区</span>
-          </div>
-          <div class="session-title-wrap">
-            <h1 class="session-title" id="sessionTitle">新会话</h1>
+          <div class="navbar-breadcrumbs is-new-session desktop-only-flex" id="navbarBreadcrumbs">
+            <div class="active-ws-pill" id="navbarWsPill" title="点击展开/切换工作区">
+              <span class="pill-icon">📁</span>
+              <span class="pill-path" id="navWsPath">工作区</span>
+              <svg class="pill-arrow-xs" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <span class="nav-breadcrumb-divider">/</span>
+            <div class="session-title-wrap">
+              <h1 class="session-title" id="sessionTitle">新会话</h1>
+            </div>
           </div>
         </div>
 
+        <!-- Mobile Center: DeepSeek/GPT Style Clean Model Selector Pill -->
+        <div class="navbar-center mobile-only-flex" id="navbarCenter">
+          <button type="button" class="mobile-nav-model-pill" id="mobileNavModelBtn" title="选择智能体模型与思考强度">
+            <span class="mobile-nav-model-name" id="mobileNavModelName">Gemini 3.8</span>
+            <span class="mobile-nav-model-effort" id="mobileNavModelEffort">高思考</span>
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </div>
+
         <div class="navbar-right">
-          <!-- Theme Toggle Button -->
-          <button class="btn-pill btn-theme-toggle" id="themeToggleBtn" title="切换主题 (深色 / 浅色)">
+          <!-- Desktop: New Chat Quick Button -->
+          <button class="btn-pill btn-new-chat-pill desktop-only-inline-flex" id="desktopNewChatBtn" title="开启新对话">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span>新会话</span>
+          </button>
+
+          <!-- Desktop: Google Account Pill -->
+          <button class="btn-pill btn-account-pill desktop-only-inline-flex" id="accountManagerBtn" title="当前 Google 账号与额度 · 点击管理/切换">
+            <span class="account-pill-icon">👤</span>
+            <span class="account-pill-email" id="navAccountEmail">账号加载中...</span>
+            <span class="account-quota-badge" id="navAccountQuota">--</span>
+          </button>
+
+          <!-- Desktop: Quick Switch to Best Account (1-Tap) -->
+          <button class="btn-pill btn-quick-switch desktop-only-inline-flex" id="navQuickSwitchBestBtn" title="⚡ 一键切换至配额最高可用账号">
+            <span class="quick-switch-icon">⚡</span>
+            <span class="quick-switch-text">切最佳</span>
+          </button>
+
+          <!-- Desktop: Theme Toggle Button -->
+          <button class="btn-pill btn-theme-toggle desktop-only-inline-flex" id="themeToggleBtn" title="切换主题 (深色 / 浅色)">
             <svg id="themeIconMoon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
             <svg id="themeIconSun" class="hidden" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
             <span id="themeNameText">深色</span>
           </button>
 
-          <!-- Quick IP Copy -->
-          <button class="btn-pill" id="copyUrlBtn" title="复制局域网访问地址">
+          <!-- Mobile: 1-Tap New Chat (+) -->
+          <button class="btn-icon mobile-only-flex mobile-nav-btn mobile-new-chat-btn" id="mobileNewChatBtn" title="开启新会话">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+
+          <!-- Universal Settings Button (Mobile & Desktop) -->
+          <button class="btn-pill btn-settings-pill" id="settingsBtn" title="控制台设置 (账号额度池 / 工作区 / 执行模式 / 主题 / 安全)">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span class="settings-pill-text desktop-only-inline">设置</span>
+          </button>
+
+          <!-- Quick IP Copy (Desktop only) -->
+          <button class="btn-pill btn-lan-pill desktop-only-inline-flex" id="copyUrlBtn" title="点击复制局域网访问地址">
             <span class="status-dot online"></span>
             <span id="navLanUrl">局域网地址</span>
           </button>
 
-          <!-- Auth Status / Lock Button -->
-          <button class="btn-pill btn-auth-pill" id="authBtn" title="访问密钥管理 / 点击锁定">
+          <!-- Auth Status / Lock Button (Desktop only) -->
+          <button class="btn-pill btn-auth-pill desktop-only-inline-flex" id="authBtn" title="访问密钥管理 / 点击锁定">
             <span id="authIcon">🔒</span>
             <span id="authStatusText">已授权</span>
           </button>
@@ -122,15 +206,21 @@
 
       <!-- Chat Messages Scroll Container -->
       <div class="chat-container" id="chatContainer">
-        <!-- Welcome view (shown when conversation is empty) -->
+        <!-- Welcome view (DeepSeek / ChatGPT style clean minimalist empty state) -->
         <div class="welcome-view" id="welcomeView">
-          <div class="welcome-clean-state">
-            <div class="clean-brand-mark">
-              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.6">
+          <div class="welcome-hero-clean">
+            <div class="welcome-brand-avatar">
+              <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.8">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
               </svg>
             </div>
-            <div class="clean-brand-text">Antigravity</div>
+            <h2 class="welcome-title">有什么可以帮您？</h2>
+            <div class="welcome-ws-indicator" id="welcomeWsBadge" title="点击切换或选择工作区目录">
+              <span class="ws-dot"></span>
+              <span class="ws-label">工作区：</span>
+              <span class="welcome-ws-badge-text" id="welcomeWsBadgeText">加载中...</span>
+              <svg class="ws-arrow" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
           </div>
         </div>
 
@@ -165,48 +255,108 @@
             <textarea
               id="promptInput"
               class="prompt-textarea"
-              placeholder="输入任务或问题... (支持拖拽文件/PDF/图片、Ctrl+V 粘贴，Enter 发送，Shift+Enter 换行)"
-              rows="2"
+              placeholder="输入任务指令或编程问题..."
+              rows="1"
             ></textarea>
           </div>
 
           <!-- Bottom Controls Toolbar -->
           <div class="input-bottom-bar">
             <div class="input-controls-left">
-              <!-- Model Selector -->
-              <div class="bottom-pill-selector" title="选择运行模型">
-                <svg class="pill-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
-                  <rect x="4" y="8" width="16" height="12" rx="2"/>
-                </svg>
-                <select id="modelSelect" class="pill-select"></select>
+              <!-- Model, Reasoning & Execution Cascading Selector -->
+              <div class="model-cascader-container" id="modelCascaderContainer">
+                <button type="button" class="bottom-pill-selector model-cascader-trigger" id="modelCascaderTrigger" title="点击配置智能体模型、思考强度与执行模式">
+                  <svg class="pill-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
+                    <rect x="4" y="8" width="16" height="12" rx="2"/>
+                  </svg>
+                  <span class="model-trigger-name" id="modelTriggerName">Gemini 3.8 Flash</span>
+                  <span class="model-trigger-effort" id="modelTriggerEffort">高思考</span>
+                  <span class="model-trigger-mode" id="modelTriggerMode">自动执行</span>
+                  <svg class="pill-arrow" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </button>
+
+                <!-- Hidden selects for backward compatibility -->
+                <select id="modelSelect" class="hidden"></select>
+                <select id="effortSelect" class="hidden"></select>
+                <select id="modeSelect" class="hidden">
+                  <option value="accept-edits">自动执行</option>
+                  <option value="plan">仅规划</option>
+                </select>
+
+                <!-- Cascading Menu Dropdown Popup / Mobile Bottom Sheet -->
+                <div class="model-cascader-popover hidden" id="modelCascaderPopover">
+                  <div class="model-sheet-header">
+                    <div class="model-sheet-handle"></div>
+                    <div class="model-sheet-title-row">
+                      <span class="model-sheet-title">智能体模型与执行设置</span>
+                      <button type="button" class="btn-icon-xs model-sheet-close" id="modelSheetCloseBtn" title="关闭">✕</button>
+                    </div>
+                  </div>
+
+                  <!-- Execution Mode Switcher inside modal -->
+                  <div class="modal-mode-section">
+                    <div class="mode-section-header">
+                      <span class="mode-section-label">执行规划模式</span>
+                      <span class="mode-section-hint">点击快速切换</span>
+                    </div>
+                    <div class="mode-segmented-grid" id="modeSegmentedGrid">
+                      <div class="mode-card-option active" data-mode="accept-edits" id="modeCardAccept">
+                        <div class="mode-card-header">
+                          <span class="mode-card-icon">⚡</span>
+                          <span class="mode-card-title">自动执行</span>
+                          <span class="mode-card-badge">推荐</span>
+                          <span class="mode-card-check">✓</span>
+                        </div>
+                        <div class="mode-card-desc">自主完成代码编写、重构与终端命令执行验证</div>
+                      </div>
+                      <div class="mode-card-option" data-mode="plan" id="modeCardPlan">
+                        <div class="mode-card-header">
+                          <span class="mode-card-icon">📋</span>
+                          <span class="mode-card-title">仅规划</span>
+                          <span class="mode-card-badge plan-badge">仅规划模式</span>
+                          <span class="mode-card-check">✓</span>
+                        </div>
+                        <div class="mode-card-desc">仅输出逻辑分析与实施规划，不修改文件</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="model-cascader-panels">
+                    <!-- Left: Model Families -->
+                    <div class="model-panel-families" id="modelPanelFamilies">
+                      <div class="model-panel-header">选择模型</div>
+                      <div class="model-families-list" id="modelFamiliesList"></div>
+                    </div>
+                    <!-- Right: Thinking Effort Submenu -->
+                    <div class="model-panel-efforts" id="modelPanelEfforts">
+                      <div class="model-panel-header" id="modelEffortsHeader">思考强度与深度</div>
+                      <div class="model-efforts-list" id="modelEffortsList"></div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Backdrop for mobile bottom sheet -->
+                <div class="model-cascader-backdrop hidden" id="modelCascaderBackdrop"></div>
               </div>
 
-              <!-- Reasoning Effort Selector -->
-              <div class="bottom-pill-selector" title="选择思考深度">
-                <svg class="pill-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                </svg>
-                <select id="effortSelect" class="pill-select">
-                  <option value="high">思考: 高 (High)</option>
-                  <option value="medium">思考: 中 (Medium)</option>
-                  <option value="low">思考: 低 (Low)</option>
-                </select>
-              </div>
+              <!-- Quick Execution Mode Toggle Chip (Mobile Friendly) -->
+              <button type="button" class="composer-chip-btn mobile-only-inline-flex" id="composerModeToggleBtn" title="点击切换执行模式：自动执行 / 仅规划">
+                <span id="composerModeText">⚡ 自动执行</span>
+              </button>
 
-              <!-- Execution Mode Selector -->
-              <div class="bottom-pill-selector" title="执行模式">
-                <svg class="pill-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                </svg>
-                <select id="modeSelect" class="pill-select">
-                  <option value="accept-edits">自动执行 (Accept Edits)</option>
-                  <option value="plan">仅规划 (Plan Only)</option>
-                </select>
+              <!-- Quick Account Selector & Switcher in Thumb Zone (Desktop only) -->
+              <div class="bottom-pill-selector composer-account-pill desktop-only-inline-flex" id="composerAccountPill" title="当前 Google 账号 · 点击查看/切换">
+                <span class="cap-icon">👤</span>
+                <span class="cap-email" id="composerAccountEmail">账号加载中...</span>
+                <span class="cap-quota" id="composerAccountQuota">--</span>
+                <button type="button" class="composer-quick-best-btn" id="composerQuickBestBtn" title="⚡ 一键切最佳账号">⚡</button>
               </div>
             </div>
 
             <div class="input-controls-right">
+              <span class="input-shortcut-hint">↵ 发送 · ⇧↵ 换行</span>
               <!-- Upload Attachment / Image Button -->
               <button class="btn-icon btn-attach" id="uploadImageBtn" type="button" title="添加文件/图片 (支持直接拖拽文件或图片，或 Ctrl+V 粘贴)">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
@@ -243,23 +393,103 @@
           <label>服务器绝对路径 <span class="required">*</span></label>
           <div class="input-with-action">
             <input type="text" id="wsInputPath" class="form-input" placeholder="/path/to/your/project">
-            <button class="btn btn-secondary" id="validatePathBtn">检测路径</button>
+            <button type="button" class="btn btn-secondary" id="browseDirBtn" title="在服务器端浏览选择文件夹">📂 浏览目录</button>
+            <button type="button" class="btn btn-secondary" id="validatePathBtn">检测路径</button>
           </div>
           <div class="validation-feedback" id="wsValidationFeedback"></div>
         </div>
         <div class="form-group">
           <label>快速选择常用路径：</label>
           <div class="quick-paths-list">
-            <button class="btn-tag" data-path="/var/www">/var/www</button>
-            <button class="btn-tag" data-path="/root">/root</button>
-            <button class="btn-tag" data-path="/opt">/opt</button>
-            <button class="btn-tag" data-path="/home">/home</button>
+            <button type="button" class="btn-tag" data-path="/opt/1panel/www/sites">/opt/1panel/www/sites</button>
+            <button type="button" class="btn-tag" data-path="/var/www">/var/www</button>
+            <button type="button" class="btn-tag" data-path="/opt">/opt</button>
+            <button type="button" class="btn-tag" data-path="/root">/root</button>
+            <button type="button" class="btn-tag" data-path="/home">/home</button>
           </div>
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" id="cancelAddWsModal">取消</button>
         <button class="btn btn-primary" id="saveWorkspaceBtn">确认添加并切换</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Rename Workspace -->
+  <div class="modal-overlay hidden" id="renameWorkspaceModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>重命名工作区</h3>
+        <button class="btn-icon" id="closeRenameWsModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>工作区路径</label>
+          <div class="form-input readonly-input" id="renameWsPathPreview"></div>
+        </div>
+        <div class="form-group">
+          <label>工作区显示名称 <span class="required">*</span></label>
+          <input type="text" id="renameWsInputName" class="form-input" placeholder="输入新的工作区名称..." autofocus>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelRenameWsModal">取消</button>
+        <button class="btn btn-primary" id="submitRenameWsBtn">保存修改</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Server Directory Picker -->
+  <div class="modal-overlay hidden" id="dirPickerModal" style="z-index: 105;">
+    <div class="modal-dialog dir-picker-dialog">
+      <div class="modal-header">
+        <div class="dir-picker-title">
+          <span class="dir-picker-icon">📁</span>
+          <h3>选择服务器文件夹</h3>
+        </div>
+        <button class="btn-icon" id="closeDirPickerModal">✕</button>
+      </div>
+      <div class="modal-body dir-picker-body">
+        <!-- Breadcrumb & Nav Bar -->
+        <div class="dir-picker-nav">
+          <button type="button" class="btn btn-secondary btn-sm" id="dirNavUpBtn" title="返回上一级">⬆ 上级</button>
+          <div class="dir-breadcrumb" id="dirBreadcrumb">
+            <!-- Dynamic breadcrumbs: / > opt > 1panel > ... -->
+          </div>
+          <button type="button" class="btn-icon btn-sm" id="dirRefreshBtn" title="刷新当前目录">🔄</button>
+        </div>
+
+        <!-- Quick Jump Shortcuts -->
+        <div class="dir-quick-bar">
+          <span class="dir-quick-label">常用路径:</span>
+          <button type="button" class="btn-tag" data-dir="/opt/1panel/www/sites">/opt/1panel/www/sites</button>
+          <button type="button" class="btn-tag" data-dir="/var/www">/var/www</button>
+          <button type="button" class="btn-tag" data-dir="/opt">/opt</button>
+          <button type="button" class="btn-tag" data-dir="/root">/root</button>
+          <button type="button" class="btn-tag" data-dir="/home">/home</button>
+          <button type="button" class="btn-tag" data-dir="/">/ (根目录)</button>
+        </div>
+
+        <!-- Search / Filter input -->
+        <div class="dir-filter-wrap">
+          <input type="text" id="dirFilterInput" class="form-input" placeholder="🔍 快速过滤当前目录下的子文件夹...">
+        </div>
+
+        <!-- Directory List Container -->
+        <div class="dir-list-container" id="dirListContainer">
+          <div class="dir-list-loading">正在读取服务器目录...</div>
+        </div>
+
+        <!-- Current Selected Path Preview -->
+        <div class="dir-selected-bar">
+          <span class="dir-selected-label">当前选定路径:</span>
+          <span class="dir-selected-path" id="dirSelectedPathPreview">/</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="cancelDirPickerModal">取消</button>
+        <button type="button" class="btn btn-primary" id="confirmDirPickerBtn">选定此目录作为工作区</button>
       </div>
     </div>
   </div>
@@ -296,6 +526,241 @@
     </div>
   </div>
 
+  <!-- Modal / Bottom Sheet: Account Management & Quota Switcher -->
+  <div class="modal-overlay hidden" id="accountModal" style="z-index: 110;">
+    <div class="modal-dialog account-dialog account-sheet">
+      <!-- Sheet Drag Handle (Mobile) -->
+      <div class="account-sheet-handle"></div>
+
+      <div class="modal-header account-modal-header">
+        <div class="account-modal-title">
+          <span class="account-modal-icon">👤</span>
+          <div>
+            <h3>Google 账号与额度池 <span class="account-count-badge" id="accountPoolTotalBadge">--</span></h3>
+            <p class="account-modal-sub" id="accountModalSub">多账号自动监控 · 额度耗尽随时快捷切换</p>
+          </div>
+        </div>
+        <button class="btn-icon" id="closeAccountModalBtn" title="关闭">✕</button>
+      </div>
+
+      <div class="modal-body account-modal-body">
+        <!-- Top Toolbar inside modal -->
+        <div class="account-toolbar">
+          <div class="account-search-wrap">
+            <span class="account-search-icon">🔍</span>
+            <input type="text" id="accountSearchInput" class="form-input" placeholder="搜索邮箱前缀、订阅级别、状态...">
+            <button type="button" class="account-search-clear hidden" id="accountSearchClearBtn" title="清除">✕</button>
+          </div>
+          <div class="account-actions-wrap">
+            <button type="button" class="btn btn-primary btn-sm btn-action-best" id="switchBestAccountBtn" title="一键切换到当前额度最高且可用的账号">
+              <span class="icon-bolt">⚡</span>
+              <span class="btn-text-best">一键切最佳</span>
+              <span class="best-quota-tag" id="bestQuotaPreviewTag"></span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="refreshQuotasBtn" title="向后端请求重新检测全部账号额度">
+              <span class="icon-refresh">🔄</span>
+              <span>刷新配额</span>
+            </button>
+            <a href="http://192.168.10.99:8088/" target="_blank" class="btn btn-secondary btn-sm" id="openManagerLink" title="在独立浏览器标签页打开 8088 管理控制台">
+              🔗 后台
+            </a>
+          </div>
+        </div>
+
+        <!-- Quick Filter Chips -->
+        <div class="account-filter-chips" id="accountFilterChips">
+          <button type="button" class="filter-chip active" data-filter="all">全部 <span class="chip-count" id="chipCountAll">0</span></button>
+          <button type="button" class="filter-chip" data-filter="normal">正常可用 <span class="chip-count" id="chipCountNormal">0</span></button>
+          <button type="button" class="filter-chip" data-filter="high">高配额 >70% <span class="chip-count" id="chipCountHigh">0</span></button>
+          <button type="button" class="filter-chip" data-filter="pro">PRO 级别 <span class="chip-count" id="chipCountPro">0</span></button>
+          <button type="button" class="filter-chip" data-filter="low">低额度/耗尽 <span class="chip-count" id="chipCountLow">0</span></button>
+        </div>
+
+        <!-- Current Active Account Banner -->
+        <div class="current-account-card" id="currentAccountBanner">
+          <div class="cab-header">
+            <div class="cab-pulse-wrap">
+              <span class="status-dot online"></span>
+              <span class="cab-label">当前运行账号</span>
+            </div>
+            <span class="cab-email" id="currentAccountBannerEmail">加载中...</span>
+            <span class="cab-tier" id="currentAccountBannerTier">PRO</span>
+          </div>
+          <div class="cab-quotas-row" id="currentAccountBannerQuotas">
+            <!-- Quotas injected by JS -->
+          </div>
+        </div>
+
+        <!-- Accounts List -->
+        <div class="account-list-container" id="accountListContainer">
+          <div class="loading-state">正在加载账号列表与实时额度...</div>
+        </div>
+      </div>
+      <div class="modal-footer account-modal-footer">
+        <div class="account-footer-tip">
+          💡 点击任意卡片即可直接切换，底层 Antigravity CLI 立即生效。
+        </div>
+        <button class="btn btn-secondary" id="closeAccountModalFooterBtn">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal / Bottom Sheet: Unified Settings Center (设置中心) -->
+  <div class="modal-overlay hidden" id="settingsModal" style="z-index: 115;">
+    <div class="modal-dialog settings-dialog">
+      <div class="modal-header settings-modal-header">
+        <div class="settings-modal-title">
+          <span class="settings-modal-icon">⚙️</span>
+          <div>
+            <h3>控制台设置</h3>
+            <p class="settings-modal-sub">账号额度 · 智能体偏好 · 工作区 · 界面与安全</p>
+          </div>
+        </div>
+        <button class="btn-icon" id="closeSettingsModalBtn" title="关闭">✕</button>
+      </div>
+
+      <div class="modal-body settings-modal-body">
+        <!-- Section 1: Google 账号与额度池 -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <span class="sec-icon">👤</span>
+            <span>Google 账号与实时额度</span>
+          </div>
+          <div class="settings-card">
+            <div class="settings-account-top">
+              <div class="settings-account-info">
+                <span class="settings-account-email" id="settingsAccountEmail">账号加载中...</span>
+                <span class="settings-account-tier" id="settingsAccountTier">PRO</span>
+              </div>
+              <div class="settings-account-actions">
+                <button type="button" class="btn btn-sm btn-primary" id="settingsQuickBestBtn" title="一键切换到当前额度最高可用账号">
+                  ⚡ 切最佳
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" id="settingsOpenAccountPoolBtn" title="打开完整多账号管理与切换列表">
+                  多账号列表
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" id="settingsRefreshQuotasBtn" title="重新检测额度">
+                  🔄
+                </button>
+              </div>
+            </div>
+            <!-- Live Quota Bars -->
+            <div class="settings-quotas-bars" id="settingsQuotasBars">
+              <!-- Dynamically populated: Claude, Gemini Pro, Gemini Flash -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: 智能体偏好与执行模式 -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <span class="sec-icon">🤖</span>
+            <span>智能体偏好与执行模式</span>
+          </div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <div class="settings-row-name">执行模式</div>
+                <div class="settings-row-desc">选择自动修改代码并验证，或仅生成规划思路</div>
+              </div>
+              <div class="settings-segmented-group">
+                <button type="button" class="settings-seg-btn active" data-mode="accept-edits" id="settingsModeAccept">
+                  ⚡ 自动执行
+                </button>
+                <button type="button" class="settings-seg-btn" data-mode="plan" id="settingsModePlan">
+                  📋 仅规划
+                </button>
+              </div>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <div class="settings-row-name">模型与推理深度</div>
+                <div class="settings-row-desc" id="settingsModelSummary">Gemini 3.8 Flash · 高思考 (深度推理)</div>
+              </div>
+              <button type="button" class="btn btn-sm btn-secondary" id="settingsOpenModelPickerBtn">
+                配置模型 ⚙️
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: 工作区与项目路径 -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <span class="sec-icon">📁</span>
+            <span>工作区与项目路径</span>
+          </div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <div class="settings-row-name" id="settingsWsName">当前工作区</div>
+                <div class="settings-row-desc settings-path-text" id="settingsWsPath">/opt/1panel/...</div>
+              </div>
+              <div class="settings-ws-btns">
+                <button type="button" class="btn btn-sm btn-secondary" id="settingsSwitchWsBtn">切换</button>
+                <button type="button" class="btn btn-sm btn-secondary" id="settingsAddWsBtn">+ 添加</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4: 界面与主题 -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <span class="sec-icon">🎨</span>
+            <span>界面外观与主题</span>
+          </div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <div class="settings-row-name">主题模式</div>
+                <div class="settings-row-desc">深色极客黑或浅色白净模式</div>
+              </div>
+              <div class="settings-segmented-group">
+                <button type="button" class="settings-seg-btn" data-theme="dark" id="settingsThemeDark">
+                  🌙 极客深色
+                </button>
+                <button type="button" class="settings-seg-btn" data-theme="light" id="settingsThemeLight">
+                  ☀️ 简约白净
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 5: 局域网访问与安全控制 -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <span class="sec-icon">🛡️</span>
+            <span>局域网访问与安全</span>
+          </div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <div class="settings-row-name">局域网访问地址</div>
+                <div class="settings-row-desc settings-path-text" id="settingsLanUrl">http://...</div>
+              </div>
+              <button type="button" class="btn btn-sm btn-secondary" id="settingsCopyLanBtn">📋 复制</button>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <div class="settings-row-name">安全控制</div>
+                <div class="settings-row-desc">访问密钥已验证 · 支持随时锁定</div>
+              </div>
+              <button type="button" class="btn btn-sm btn-danger-subtle" id="settingsLockBtn">🔒 锁定控制台</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer settings-modal-footer">
+        <button class="btn btn-secondary w-full" id="closeSettingsModalFooterBtn">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Drag & Drop Fullscreen Overlay -->
   <div class="drag-drop-overlay hidden" id="dropOverlay">
     <div class="drop-overlay-box">
@@ -311,6 +776,10 @@
     </div>
   </div>
 
-  <script src="/app.js"></script>
+  <!-- Global Toast Notifications -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/vendor/marked.min.js"></script>
+  <script src="/app.js?v=2.6"></script>
 </body>
 </html>

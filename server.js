@@ -18,15 +18,49 @@ const HOST = process.env.HOST || '0.0.0.0';
 const AGY_PATH = process.env.AGY_PATH || '/root/.local/bin/agy';
 const BRAIN_DIR = process.env.BRAIN_DIR || '/root/.gemini/antigravity-cli/brain';
 const WORKSPACES_FILE = path.join(__dirname, 'data', 'workspaces.json');
+const CONV_WORKSPACES_FILE = path.join(__dirname, 'data', 'conversation_workspaces.json');
 const AUTH_FILE = path.join(__dirname, 'data', 'auth.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const UPLOADS_DIR = path.join(__dirname, 'data', 'uploads');
 const DEFAULT_WORKSPACE = process.env.DEFAULT_WORKSPACE || process.cwd();
+const ACCOUNT_MANAGER_URL = process.env.ACCOUNT_MANAGER_URL || 'http://127.0.0.1:8088';
 
 // Active agent processes: conversation_id -> child_process
 const activeProcesses = new Map();
-// Active running conversations metadata: conversation_id -> { id, title, created_at, updated_at, is_running: true }
+// Active running conversations metadata: conversation_id -> { id, title, created_at, updated_at, is_running: true, workspace: string }
 const runningConversationsMeta = new Map();
+
+// Persistent mapping of conversation_id -> workspace path
+let conversationWorkspacesMap = new Map();
+function loadConversationWorkspaces() {
+  try {
+    if (fs.existsSync(CONV_WORKSPACES_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CONV_WORKSPACES_FILE, 'utf-8'));
+      conversationWorkspacesMap = new Map(Object.entries(data));
+    }
+  } catch (err) {
+    console.error('Error loading conversation workspaces:', err);
+  }
+}
+loadConversationWorkspaces();
+
+let saveConvWorkspacesTimer = null;
+function saveConversationWorkspace(convId, wsPath) {
+  if (!convId || !wsPath) return;
+  conversationWorkspacesMap.set(convId, wsPath);
+  if (!saveConvWorkspacesTimer) {
+    saveConvWorkspacesTimer = setTimeout(() => {
+      saveConvWorkspacesTimer = null;
+      try {
+        const obj = Object.fromEntries(conversationWorkspacesMap);
+        fs.mkdirSync(path.dirname(CONV_WORKSPACES_FILE), { recursive: true });
+        fs.writeFileSync(CONV_WORKSPACES_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+      } catch (e) {
+        console.error('Error saving conversation workspaces:', e);
+      }
+    }, 200);
+  }
+}
 
 // Authentication Configuration
 let AUTH_CONFIG = {
@@ -131,17 +165,99 @@ function isAuthorized(req, parsedUrl) {
   }
 }
 
-// Supported Models
-const AVAILABLE_MODELS = [
-  { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High Reasoning)', default: true },
-  { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash (Medium)' },
-  { id: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)' },
-  { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (High)' },
-  { id: 'gemini-3.1-pro-high', name: 'Gemini 3.1 Pro (High Reasoning)' },
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' },
-  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)' },
-  { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)' }
+// Supported Model Families and Reasoning Efforts
+const MODEL_FAMILIES = [
+  {
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash',
+    tag: '推荐',
+    icon: '⚡',
+    description: '新一代极速主力模型，强悍推理',
+    efforts: [
+      { id: 'gemini-3.8-flash-high', effort: 'high', label: '高思考 (深度推理)', desc: '复杂逻辑推导与大工程代码重构', default: true },
+      { id: 'gemini-3.8-flash-medium', effort: 'medium', label: '中思考 (均衡模式)', desc: '平衡响应速度与日常编程任务' },
+      { id: 'gemini-3.8-flash-low', effort: 'low', label: '低思考 (极速响应)', desc: '毫秒级响应，简单问答与快速处理' }
+    ]
+  },
+  {
+    id: 'gemini-3.7-flash',
+    name: 'Gemini 3.7 Flash',
+    icon: '⚡',
+    description: '轻快灵活的大语言模型',
+    efforts: [
+      { id: 'gemini-3.7-flash-high', effort: 'high', label: '高思考 (深度推理)', desc: '多步骤深度思考推理' },
+      { id: 'gemini-3.7-flash-medium', effort: 'medium', label: '中思考 (均衡模式)', desc: '速度与准确率平衡模式' },
+      { id: 'gemini-3.7-flash-low', effort: 'low', label: '低思考 (极速响应)', desc: '快速低延迟即时响应' }
+    ]
+  },
+  {
+    id: 'gemini-3.6-flash',
+    name: 'Gemini 3.6 Flash',
+    icon: '⚡',
+    description: '稳定代际 Flash',
+    efforts: [
+      { id: 'gemini-3.6-flash-high', effort: 'high', label: '高思考 (深度推理)', desc: '长上下文稳定深度推理' },
+      { id: 'gemini-3.6-flash-medium', effort: 'medium', label: '中思考 (均衡模式)', desc: '标准均衡执行模式' },
+      { id: 'gemini-3.6-flash-low', effort: 'low', label: '低思考 (极速响应)', desc: '快速响应模式' }
+    ]
+  },
+  {
+    id: 'gemini-3.1-pro',
+    name: 'Gemini 3.1 Pro',
+    tag: '旗舰',
+    icon: '🧠',
+    description: 'Google 旗舰级多模态推理大模型',
+    efforts: [
+      { id: 'gemini-3.1-pro-high', effort: 'high', label: '高思考 (深度推理)', desc: '顶级算法推导、数学证明与高难度逻辑' },
+      { id: 'gemini-3.1-pro-low', effort: 'low', label: '低思考 (极速响应)', desc: '轻量低延迟快速推理' }
+    ]
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
+    tag: 'Anthropic',
+    icon: '🟣',
+    description: 'Anthropic 顶尖编程推理模型',
+    efforts: [
+      { id: 'claude-sonnet-4-6', effort: 'high', label: '内置深度思考 (代码推理)', desc: '卓越的系统架构设计与严谨代码审查' }
+    ]
+  },
+  {
+    id: 'claude-opus-4-6-thinking',
+    name: 'Claude Opus 4.6',
+    tag: 'Anthropic',
+    icon: '🟣',
+    description: 'Anthropic 旗舰超级模型',
+    efforts: [
+      { id: 'claude-opus-4-6-thinking', effort: 'high', label: '内置深度思考 (顶级推理)', desc: '最深邃的认知推理与复杂长程推导' }
+    ]
+  },
+  {
+    id: 'gpt-oss-120b-medium',
+    name: 'GPT-OSS 120B',
+    tag: '开源',
+    icon: '🟢',
+    description: '开源 120B 稠密大模型',
+    efforts: [
+      { id: 'gpt-oss-120b-medium', effort: 'medium', label: '中思考 (均衡模式)', desc: '开源高性价比平衡推理' }
+    ]
+  }
 ];
+
+const AVAILABLE_MODELS = [];
+for (const fam of MODEL_FAMILIES) {
+  for (const eff of fam.efforts) {
+    AVAILABLE_MODELS.push({
+      id: eff.id,
+      name: `${fam.name} (${eff.label})`,
+      family_id: fam.id,
+      family_name: fam.name,
+      effort: eff.effort,
+      effort_label: eff.label,
+      default: !!eff.default
+    });
+  }
+}
 
 // Helper: Get Non-internal IPv4 LAN addresses
 function getLanAddresses() {
@@ -185,6 +301,142 @@ function saveWorkspaces(list) {
     console.error('Error saving workspaces file:', err);
     return false;
   }
+}
+
+// Helper: Query SQLite Summaries DB map if available
+function getSummariesDbMap() {
+  const map = new Map();
+  try {
+    const dbPath = path.join(os.homedir(), '.gemini', 'antigravity-cli', 'conversation_summaries.db');
+    if (fs.existsSync(dbPath)) {
+      const { DatabaseSync } = require('node:sqlite');
+      const db = new DatabaseSync(dbPath, { readOnly: true });
+      const rows = db.prepare('SELECT conversation_id, title, workspace_uris, last_modified_time FROM conversation_summaries').all();
+      for (const r of rows) {
+        let ws = null;
+        if (r.workspace_uris) {
+          try {
+            const arr = JSON.parse(r.workspace_uris);
+            if (Array.isArray(arr) && arr[0]) {
+              ws = arr[0].replace('file://', '');
+            }
+          } catch (e) {}
+        }
+        map.set(r.conversation_id, { title: r.title, ws, mtime: r.last_modified_time });
+      }
+    }
+  } catch (e) {
+    // Graceful fallback if SQLite is locked or unavailable
+  }
+  return map;
+}
+
+// Helper: Resolve workspace path for a conversation
+function resolveConvWorkspacePath(convId, transcriptPath, dbMap) {
+  if (conversationWorkspacesMap.has(convId)) {
+    return conversationWorkspacesMap.get(convId);
+  }
+  const runningMeta = runningConversationsMeta.get(convId);
+  if (runningMeta && runningMeta.workspace) {
+    saveConversationWorkspace(convId, runningMeta.workspace);
+    return runningMeta.workspace;
+  }
+  const dbEntry = dbMap ? dbMap.get(convId) : null;
+  if (dbEntry && dbEntry.ws) {
+    saveConversationWorkspace(convId, dbEntry.ws);
+    return dbEntry.ws;
+  }
+  if (transcriptPath && fs.existsSync(transcriptPath)) {
+    try {
+      const stat = fs.statSync(transcriptPath);
+      const fd = fs.openSync(transcriptPath, 'r');
+      const buf = Buffer.alloc(Math.min(stat.size, 65536));
+      fs.readSync(fd, buf, 0, buf.length, 0);
+      fs.closeSync(fd);
+      const chunk = buf.toString('utf-8');
+
+      // 1. Rule pattern: <RULE[/opt/1panel/www/sites/.../AGENTS.md]>
+      const mRule = chunk.match(/<RULE\[(\/opt\/1panel\/[^\s\"\'\<\>]+)\/AGENTS\.md\]>/);
+      if (mRule) {
+        saveConversationWorkspace(convId, mRule[1]);
+        return mRule[1];
+      }
+      // 2. Cwd in tool calls: "Cwd": "/opt/..."
+      const mCwd = chunk.match(/\"Cwd\":\s*\"(\/opt\/[^\"]+)\"/);
+      if (mCwd) {
+        saveConversationWorkspace(convId, mCwd[1]);
+        return mCwd[1];
+      }
+      // 3. File paths in user requests or assistant responses
+      const mPath = chunk.match(/(\/opt\/1panel\/www\/sites\/[a-zA-Z0-9\._\-]+(?:\/index)?)/);
+      if (mPath) {
+        saveConversationWorkspace(convId, mPath[1]);
+        return mPath[1];
+      }
+    } catch (e) {}
+  }
+  return null;
+}
+
+// Helper: Classify workspace path into a structured workspace object
+function classifyWorkspaceInfo(wsPath, registeredList) {
+  if (!wsPath) {
+    return {
+      workspace_id: 'unclassified',
+      workspace_name: '其它 / 未分类',
+      workspace_path: '',
+      is_registered: false
+    };
+  }
+
+  const resolved = path.resolve(wsPath);
+
+  // 1. Exact match in registered workspaces
+  const exact = registeredList.find(w => path.resolve(w.path) === resolved);
+  if (exact) {
+    return {
+      workspace_id: exact.id,
+      workspace_name: exact.name,
+      workspace_path: exact.path,
+      is_registered: true
+    };
+  }
+
+  // 2. Prefix match in registered workspaces (most specific, ignoring generic /opt/1panel/www/sites root)
+  const matches = registeredList
+    .filter(w => resolved.startsWith(path.resolve(w.path)))
+    .sort((a, b) => b.path.length - a.path.length);
+  if (matches.length > 0 && path.resolve(matches[0].path) !== '/opt/1panel/www/sites') {
+    return {
+      workspace_id: matches[0].id,
+      workspace_name: matches[0].name,
+      workspace_path: matches[0].path,
+      is_registered: true
+    };
+  }
+
+  // 3. Extract site name from /opt/1panel/www/sites/<site_name>
+  const siteMatch = resolved.match(/\/opt\/1panel\/www\/sites\/([a-zA-Z0-9\._\-]+)/);
+  if (siteMatch) {
+    const siteName = siteMatch[1];
+    const sitePath = `/opt/1panel/www/sites/${siteName}/index`;
+    return {
+      workspace_id: 'ws_auto_' + siteName.replace(/[^a-zA-Z0-9]/g, '_'),
+      workspace_name: siteName,
+      workspace_path: fs.existsSync(sitePath) ? sitePath : `/opt/1panel/www/sites/${siteName}`,
+      is_registered: false
+    };
+  }
+
+  // 4. Fallback folder name
+  let name = path.basename(resolved);
+  if (name === 'index') name = path.basename(path.dirname(resolved));
+  return {
+    workspace_id: 'ws_auto_' + Buffer.from(resolved).toString('hex').slice(0, 8),
+    workspace_name: name,
+    workspace_path: resolved,
+    is_registered: false
+  };
 }
 
 // Helper: Parse JSON body
@@ -419,8 +671,62 @@ const server = http.createServer(async (req, res) => {
         lan_interfaces: lanList,
         hostname: os.hostname(),
         models: AVAILABLE_MODELS,
-        default_workspace: DEFAULT_WORKSPACE
+        model_families: MODEL_FAMILIES,
+        default_workspace: DEFAULT_WORKSPACE,
+        account_manager_url: `http://${primaryIp}:8088`
       });
+    }
+
+    // --- Account Manager Integration (http://127.0.0.1:8088) ---
+    if (pathname === '/api/account-manager/accounts' && req.method === 'GET') {
+      try {
+        const response = await fetch(`${ACCOUNT_MANAGER_URL}/api/accounts`);
+        const data = await response.json();
+        return sendJson(res, response.status, data);
+      } catch (err) {
+        return sendJson(res, 502, { error: '无法连接到账号管理服务 (8088): ' + err.message });
+      }
+    }
+
+    if (pathname === '/api/account-manager/best' && req.method === 'GET') {
+      try {
+        const response = await fetch(`${ACCOUNT_MANAGER_URL}/api/accounts/best`);
+        const data = await response.json();
+        return sendJson(res, response.status, data);
+      } catch (err) {
+        return sendJson(res, 502, { error: '无法获取最佳额度账号: ' + err.message });
+      }
+    }
+
+    if (pathname === '/api/account-manager/switch' && req.method === 'POST') {
+      try {
+        const body = await parseJsonBody(req);
+        const email = (body.email || '').trim();
+        if (!email) {
+          return sendJson(res, 400, { error: '请提供要切换的目标账号邮箱' });
+        }
+        const response = await fetch(`${ACCOUNT_MANAGER_URL}/api/accounts/switch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await response.json();
+        return sendJson(res, response.status, data);
+      } catch (err) {
+        return sendJson(res, 502, { error: '切换账号请求失败: ' + err.message });
+      }
+    }
+
+    if (pathname === '/api/account-manager/quota/refresh' && req.method === 'POST') {
+      try {
+        const response = await fetch(`${ACCOUNT_MANAGER_URL}/api/quota/refresh`, {
+          method: 'POST'
+        });
+        const data = await response.json().catch(() => ({ ok: true }));
+        return sendJson(res, response.status, data);
+      } catch (err) {
+        return sendJson(res, 502, { error: '刷新额度请求失败: ' + err.message });
+      }
     }
 
     // 2. API: List Workspaces
@@ -487,6 +793,53 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { success: true, workspaces });
     }
 
+    // 4.1 API: Rename / Update Workspace
+    if (((pathname === '/api/workspaces/rename') && req.method === 'POST') || (pathname === '/api/workspaces' && req.method === 'PUT')) {
+      const body = await parseJsonBody(req);
+      const wsPath = (body.path || '').trim();
+      const wsId = (body.id || '').trim();
+      const newName = (body.name || '').trim();
+      const newDesc = body.description !== undefined ? String(body.description).trim() : null;
+
+      if (!newName) {
+        return sendJson(res, 400, { error: '工作区名称不能为空' });
+      }
+
+      let workspaces = getWorkspaces();
+      let target = workspaces.find(w => (wsId && w.id === wsId) || (wsPath && path.resolve(w.path) === path.resolve(wsPath)));
+
+      if (target) {
+        target.name = newName;
+        if (newDesc !== null) target.description = newDesc;
+      } else if (wsPath && fs.existsSync(wsPath)) {
+        target = {
+          id: wsId || 'ws_' + Date.now(),
+          name: newName,
+          path: path.resolve(wsPath),
+          description: newDesc || '',
+          added_at: new Date().toISOString()
+        };
+        workspaces.push(target);
+      } else {
+        return sendJson(res, 404, { error: '未找到指定工作区' });
+      }
+
+      saveWorkspaces(workspaces);
+      return sendJson(res, 200, { success: true, workspace: target, workspaces });
+    }
+
+    // 4.2 API: Assign / Change Conversation Workspace
+    if (pathname === '/api/conversations/assign-workspace' && req.method === 'POST') {
+      const body = await parseJsonBody(req);
+      const convId = (body.conversation_id || '').trim();
+      const wsPath = (body.workspace_path || '').trim();
+      if (!convId) {
+        return sendJson(res, 400, { error: 'conversation_id required' });
+      }
+      saveConversationWorkspace(convId, wsPath);
+      return sendJson(res, 200, { success: true, conversation_id: convId, workspace_path: wsPath });
+    }
+
     // 5. API: Validate Workspace Path
     if (pathname === '/api/workspaces/validate' && req.method === 'GET') {
       const checkPath = parsedUrl.searchParams.get('path');
@@ -517,22 +870,45 @@ const server = http.createServer(async (req, res) => {
 
     // 6. API: Browse Server Directories
     if (pathname === '/api/workspaces/browse' && req.method === 'GET') {
-      const targetDir = parsedUrl.searchParams.get('dir') || DEFAULT_WORKSPACE;
+      const targetDir = parsedUrl.searchParams.get('dir') || DEFAULT_WORKSPACE || '/';
       try {
         const resolved = path.resolve(targetDir);
         if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
-          return sendJson(res, 400, { error: 'Invalid directory' });
+          return sendJson(res, 400, { error: '指定目录不存在或不是文件夹: ' + resolved });
         }
-        const entries = fs.readdirSync(resolved, { withFileTypes: true });
-        const dirs = entries
-          .filter(e => e.isDirectory() && !e.name.startsWith('.'))
-          .map(e => ({
-            name: e.name,
-            path: path.join(resolved, e.name)
-          }));
+        
+        let dirs = [];
+        try {
+          const entries = fs.readdirSync(resolved, { withFileTypes: true });
+          dirs = entries
+            .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+            .map(e => {
+              const subPath = path.join(resolved, e.name);
+              let isGit = false;
+              try {
+                isGit = fs.existsSync(path.join(subPath, '.git'));
+              } catch (_) {}
+              return {
+                name: e.name,
+                path: subPath,
+                is_git: isGit
+              };
+            })
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+        } catch (readErr) {
+          return sendJson(res, 200, {
+            current: resolved,
+            parent: resolved === '/' ? null : path.dirname(resolved),
+            is_root: resolved === '/',
+            directories: [],
+            warning: '读取目录失败 (权限不足): ' + readErr.message
+          });
+        }
+
         return sendJson(res, 200, {
           current: resolved,
-          parent: path.dirname(resolved),
+          parent: resolved === '/' ? null : path.dirname(resolved),
+          is_root: resolved === '/',
           directories: dirs
         });
       } catch (err) {
@@ -542,7 +918,10 @@ const server = http.createServer(async (req, res) => {
 
     // 7. API: List Conversations
     if (pathname === '/api/conversations' && req.method === 'GET') {
-      const limit = parseInt(parsedUrl.searchParams.get('limit') || '50', 10);
+      const limit = parseInt(parsedUrl.searchParams.get('limit') || '100', 10);
+      const filterWs = (parsedUrl.searchParams.get('workspace') || '').trim();
+      const registeredWorkspaces = getWorkspaces();
+      const dbMap = getSummariesDbMap();
       const conversations = [];
 
       if (fs.existsSync(BRAIN_DIR)) {
@@ -552,7 +931,7 @@ const server = http.createServer(async (req, res) => {
           if (fs.existsSync(transcriptPath)) {
             try {
               const stat = fs.statSync(transcriptPath);
-              // Read first 20KB to get first user prompt
+              // Read first 32KB to get first user prompt
               const fd = fs.openSync(transcriptPath, 'r');
               const buffer = Buffer.alloc(Math.min(stat.size, 32768));
               fs.readSync(fd, buffer, 0, buffer.length, 0);
@@ -560,7 +939,7 @@ const server = http.createServer(async (req, res) => {
 
               const chunkStr = buffer.toString('utf-8');
               const firstLine = chunkStr.split('\n')[0];
-              let title = 'Conversation';
+              let title = '';
               let createdAt = stat.birthtime;
               if (firstLine) {
                 try {
@@ -574,7 +953,14 @@ const server = http.createServer(async (req, res) => {
                 } catch (e) {}
               }
 
+              if (!title) {
+                title = dbMap.get(dir)?.title || 'Conversation';
+              }
+
               const isRunning = activeProcesses.has(dir) || runningConversationsMeta.has(dir);
+              const wsPath = resolveConvWorkspacePath(dir, transcriptPath, dbMap);
+              const wsInfo = classifyWorkspaceInfo(wsPath, registeredWorkspaces);
+
               conversations.push({
                 id: dir,
                 title: title || 'New Conversation',
@@ -582,7 +968,10 @@ const server = http.createServer(async (req, res) => {
                 updated_at: stat.mtime,
                 size: stat.size,
                 is_running: isRunning,
-                status: isRunning ? 'running' : 'completed'
+                status: isRunning ? 'running' : 'completed',
+                workspace_id: wsInfo.workspace_id,
+                workspace_name: wsInfo.workspace_name,
+                workspace_path: wsInfo.workspace_path
               });
             } catch (err) {
               // ignore unreadable
@@ -594,6 +983,8 @@ const server = http.createServer(async (req, res) => {
       // Merge active memory conversations that haven't written to disk yet
       for (const [rId, meta] of runningConversationsMeta.entries()) {
         if (!conversations.some(c => c.id === rId)) {
+          const wsPath = meta.workspace || null;
+          const wsInfo = classifyWorkspaceInfo(wsPath, registeredWorkspaces);
           conversations.unshift({
             id: rId,
             title: meta.title || '正在运行的任务',
@@ -601,7 +992,10 @@ const server = http.createServer(async (req, res) => {
             updated_at: meta.updated_at,
             size: 0,
             is_running: true,
-            status: 'running'
+            status: 'running',
+            workspace_id: wsInfo.workspace_id,
+            workspace_name: wsInfo.workspace_name,
+            workspace_path: wsInfo.workspace_path
           });
         }
       }
@@ -613,7 +1007,17 @@ const server = http.createServer(async (req, res) => {
         return new Date(b.updated_at) - new Date(a.updated_at);
       });
 
-      return sendJson(res, 200, conversations.slice(0, limit));
+      // Filter by workspace if requested
+      let filtered = conversations;
+      if (filterWs) {
+        filtered = conversations.filter(c => {
+          if (c.workspace_id === filterWs) return true;
+          if (c.workspace_path && path.resolve(c.workspace_path) === path.resolve(filterWs)) return true;
+          return false;
+        });
+      }
+
+      return sendJson(res, 200, filtered.slice(0, limit));
     }
 
     // 8. API: Get Conversation Details
@@ -881,8 +1285,23 @@ const server = http.createServer(async (req, res) => {
       });
 
       const sendEvent = (event, data) => {
-        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        if (res.writable && !res.writableEnded && !res.destroyed) {
+          try {
+            res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+          } catch (e) {
+            // Client socket disconnected/backgrounded; ignore write error
+          }
+        }
       };
+
+      // Periodic SSE keep-alive heartbeat for mobile carriers and proxies
+      const heartbeatTimer = setInterval(() => {
+        if (res.writable && !res.writableEnded && !res.destroyed) {
+          try {
+            res.write(': keepalive\n\n');
+          } catch (e) {}
+        }
+      }, 15000);
 
       // Construct CLI Arguments
       const args = [
@@ -932,8 +1351,12 @@ const server = http.createServer(async (req, res) => {
         title: prompt.slice(0, 80) || '正在运行的任务',
         created_at: new Date(),
         updated_at: new Date(),
-        is_running: true
+        is_running: true,
+        workspace: workspace
       });
+      if (conversationId && workspace) {
+        saveConversationWorkspace(conversationId, workspace);
+      }
 
       let stdoutBuffer = '';
       let detectedConvId = conversationId;
@@ -957,8 +1380,10 @@ const server = http.createServer(async (req, res) => {
                 title: prompt.slice(0, 80) || '正在运行的任务',
                 created_at: new Date(),
                 updated_at: new Date(),
-                is_running: true
+                is_running: true,
+                workspace: workspace
               });
+              saveConversationWorkspace(detectedConvId, workspace);
             }
 
             if (data.event === 'init') {
@@ -983,12 +1408,19 @@ const server = http.createServer(async (req, res) => {
               });
             } else if (data.event === 'result') {
               sendEvent('result', data.result);
+              const resStr = JSON.stringify(data.result || {});
+              if (/RESOURCE_EXHAUSTED|quota exceeded|Rate limit|Too Many Requests|429|exceeded your current quota|Capacity exhausted/i.test(resStr)) {
+                sendEvent('quota_exhausted', { message: resStr });
+              }
             } else {
               sendEvent('raw', data);
             }
           } catch (e) {
             // Non-JSON line from agy (e.g. log message)
             sendEvent('log', { message: trimmed });
+            if (/RESOURCE_EXHAUSTED|quota exceeded|Rate limit|Too Many Requests|429|exceeded your current quota|Capacity exhausted/i.test(trimmed)) {
+              sendEvent('quota_exhausted', { message: trimmed });
+            }
           }
         }
       });
@@ -997,10 +1429,14 @@ const server = http.createServer(async (req, res) => {
         const text = chunk.toString('utf-8').trim();
         if (text) {
           sendEvent('stderr', { message: text });
+          if (/RESOURCE_EXHAUSTED|quota exceeded|Rate limit|Too Many Requests|429|exceeded your current quota|Capacity exhausted/i.test(text)) {
+            sendEvent('quota_exhausted', { message: text });
+          }
         }
       });
 
       child.on('close', code => {
+        clearInterval(heartbeatTimer);
         activeProcesses.delete(sessionKey);
         runningConversationsMeta.delete(sessionKey);
         if (detectedConvId) {
@@ -1022,10 +1458,13 @@ const server = http.createServer(async (req, res) => {
           exit_code: code,
           conversation_id: detectedConvId
         });
-        res.end();
+        if (res.writable && !res.writableEnded) {
+          try { res.end(); } catch (e) {}
+        }
       });
 
       child.on('error', err => {
+        clearInterval(heartbeatTimer);
         activeProcesses.delete(sessionKey);
         runningConversationsMeta.delete(sessionKey);
         if (detectedConvId) {
@@ -1033,12 +1472,15 @@ const server = http.createServer(async (req, res) => {
           runningConversationsMeta.delete(detectedConvId);
         }
         sendEvent('error', { error: err.message });
-        res.end();
+        if (res.writable && !res.writableEnded) {
+          try { res.end(); } catch (e) {}
+        }
       });
 
-      // If client closes connection
+      // If client closes or backgrounds connection
       req.on('close', () => {
-        // keep process running or kill? For web chat, let's keep running or cleanup if early disconnect
+        clearInterval(heartbeatTimer);
+        console.log(`[Chat] Client disconnected/backgrounded for session ${sessionKey}. Process PID ${child.pid} will continue running in background.`);
       });
 
       return;

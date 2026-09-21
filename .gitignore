@@ -4,6 +4,7 @@ node_modules/
 # Local sensitive runtime data
 data/auth.json
 data/workspaces.json
+data/conversation_workspaces.json
 data/uploads/*
 !data/uploads/.gitkeep
 data/agyweb-uploads/

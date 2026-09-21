@@ -1,5 +1,5 @@
 // Antigravity Web UI - Service Worker
-const CACHE_NAME = 'antigravity-cache-v1.2';
+const CACHE_NAME = 'antigravity-cache-v1.3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',

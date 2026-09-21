@@ -884,14 +884,26 @@ function setupEventListeners() {
   }
 
   // Attachment upload button & file input
-  if (el.uploadImageBtn && el.fileImageInput) {
-    el.uploadImageBtn.addEventListener('click', () => el.fileImageInput.click());
+  if (el.fileImageInput) {
+    // Stop click bubbling on input to prevent recursion with button wrapper
+    el.fileImageInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
     el.fileImageInput.addEventListener('change', () => {
       if (el.fileImageInput.files && el.fileImageInput.files.length > 0) {
         for (let i = 0; i < el.fileImageInput.files.length; i++) {
           uploadAndAttachFile(el.fileImageInput.files[i]);
         }
         el.fileImageInput.value = '';
+      }
+    });
+  }
+
+  if (el.uploadImageBtn) {
+    el.uploadImageBtn.addEventListener('click', (e) => {
+      if (e.target !== el.fileImageInput && el.fileImageInput) {
+        el.fileImageInput.click();
       }
     });
   }

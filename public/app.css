@@ -1364,6 +1364,61 @@ html, body {
   overflow-y: auto;
 }
 
+/* Inline Status Badge inside message bubble */
+.inline-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #3b82f6;
+  font-size: 13px;
+  font-weight: 500;
+  margin: 6px 0;
+  animation: pulseBadge 2s infinite ease-in-out;
+}
+
+@keyframes pulseBadge {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.01); }
+}
+
+.inline-status-badge .spinner-inline {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+/* Stream Interrupted / Notice Card */
+.stream-notice-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.stream-notice-card.warning {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
+}
+
+.stream-notice-card.error {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
 /* Tool Call Card */
 .tool-call-card {
   background-color: var(--bg-card);

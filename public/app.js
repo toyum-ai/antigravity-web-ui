@@ -2743,6 +2743,18 @@ async function runSessionStream(session, prompt, workspace, convIdToSend, images
       }
     }
   } finally {
+    if (session.currentStreamMessage?.statusBadgeEl) {
+      session.currentStreamMessage.statusBadgeEl.remove();
+      session.currentStreamMessage.statusBadgeEl = null;
+    }
+    if (!session.streamFinished && !session.isUserAborted && !session.inBackgroundRecovery) {
+      if (!session.currentStreamMessage || !session.currentStreamMessage.rawText.trim()) {
+        const notice = document.createElement('div');
+        notice.className = 'stream-notice-card warning';
+        notice.innerHTML = `<span class="notice-icon">⚠️</span> <span class="notice-msg">与后端的任务执行连接已中断（服务重启或网络闪断）。如需继续，请点击下方输入框重新发送。</span>`;
+        session.currentStreamMessage?.bodyEl?.appendChild(notice);
+      }
+    }
     if (!session.inBackgroundRecovery) {
       state.runningSessionIds.delete(session.sessionId);
       if (session.tempId) {
@@ -2805,6 +2817,11 @@ function handleStreamEventForSession(session, event, data) {
       updateStatus('执行完成');
     }
   } else if (event === 'done') {
+    session.streamFinished = true;
+    if (session.currentStreamMessage?.statusBadgeEl) {
+      session.currentStreamMessage.statusBadgeEl.remove();
+      session.currentStreamMessage.statusBadgeEl = null;
+    }
     if (data.conversation_id && session.sessionId !== data.conversation_id) {
       session.sessionId = data.conversation_id;
       state.sessionContainers.set(data.conversation_id, session.container);
@@ -2839,10 +2856,11 @@ function handleStepEventForSession(session, step) {
 
   const isCurrentView = state.currentConversationId === session.sessionId;
 
-  // 1. Tool execution: 实时在底部状态栏反馈工具执行进度，不向对话区域插入冗余卡片
+  // 1. Tool execution: 实时在底部状态栏与消息气泡内反馈工具执行进度
   if (step.step_type === 'tool') {
     const toolName = step.tool_name || step.tool_info?.name || '执行操作';
     session.statusText = `正在执行工具: ${toolName}...`;
+    updateSessionBadge(session, `🔧 正在执行: ${toolName}...`);
     if (isCurrentView) {
       updateStatus(session.statusText);
     }
@@ -2851,6 +2869,7 @@ function handleStepEventForSession(session, step) {
 
   // 2. Thinking / Reasoning text
   if (step.thinking_delta || step.step_type === 'thinking') {
+    updateSessionBadge(session, '💭 正在深度推理思考中...');
     let thinkingBox = msgObj.thinkingEl;
     if (!thinkingBox) {
       thinkingBox = createThinkingBox();
@@ -2864,6 +2883,10 @@ function handleStepEventForSession(session, step) {
 
   // 3. Agent Response Text Delta
   if (step.step_type === 'agent_response' && step.text_delta) {
+    if (msgObj.statusBadgeEl) {
+      msgObj.statusBadgeEl.remove();
+      msgObj.statusBadgeEl = null;
+    }
     if (msgObj.thinkingEl && typeof msgObj.thinkingEl.finalize === 'function') {
       msgObj.thinkingEl.finalize();
     }
@@ -2911,19 +2934,28 @@ function createAssistantMessageContainer(targetContainer = null) {
   const row = document.createElement('div');
   row.className = 'message-row assistant';
 
-  row.innerHTML = `<div class="message-header"><div class="message-avatar">AI</div><span class="message-author">Antigravity Agent</span></div><div class="message-content"><div class="message-body markdown-body"><div class="response-text"></div></div></div>`;
+  row.innerHTML = `<div class="message-header"><div class="message-avatar">AI</div><span class="message-author">Antigravity Agent</span></div><div class="message-content"><div class="message-body markdown-body"><div class="inline-status-badge"><span class="spinner-inline"></span><span class="badge-text">正在启动并规划任务...</span></div><div class="response-text"></div></div></div>`;
 
   container.appendChild(row);
   const textEl = row.querySelector('.response-text');
   const bodyEl = row.querySelector('.message-body');
+  const statusBadgeEl = row.querySelector('.inline-status-badge');
 
   return {
     rowEl: row,
     bodyEl: bodyEl,
     textEl: textEl,
+    statusBadgeEl: statusBadgeEl,
     rawText: '',
     thinkingEl: null
   };
+}
+
+function updateSessionBadge(session, text) {
+  if (session && session.currentStreamMessage && session.currentStreamMessage.statusBadgeEl) {
+    const textNode = session.currentStreamMessage.statusBadgeEl.querySelector('.badge-text');
+    if (textNode) textNode.textContent = text;
+  }
 }
 
 function cleanThinkingText(text) {

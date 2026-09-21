@@ -488,7 +488,9 @@ const MIME_TYPES = {
   '.pdf': 'application/pdf',
   '.txt': 'text/plain; charset=utf-8',
   '.md': 'text/markdown; charset=utf-8',
-  '.zip': 'application/zip'
+  '.zip': 'application/zip',
+  '.apk': 'application/vnd.android.package-archive',
+  '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
 
 function serveStatic(req, res, pathname, parsedUrl) {

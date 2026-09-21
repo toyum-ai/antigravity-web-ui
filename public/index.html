@@ -5,7 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Antigravity Web UI · 本地智能体控制台</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="stylesheet" href="/app.css?v=2.7">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0f1117">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Antigravity">
+  <link rel="apple-touch-icon" href="/apple_touch_icon.png">
+  <link rel="stylesheet" href="/app.css?v=2.9">
 </head>
 <body>
   <div class="app-layout">
@@ -263,16 +270,15 @@
           <!-- Bottom Controls Toolbar -->
           <div class="input-bottom-bar">
             <div class="input-controls-left">
-              <!-- Model, Reasoning & Execution Cascading Selector -->
+              <!-- Model & Reasoning Cascading Selector -->
               <div class="model-cascader-container" id="modelCascaderContainer">
-                <button type="button" class="bottom-pill-selector model-cascader-trigger" id="modelCascaderTrigger" title="点击配置智能体模型、思考强度与执行模式">
+                <button type="button" class="bottom-pill-selector model-cascader-trigger" id="modelCascaderTrigger" title="点击配置智能体模型与思考强度">
                   <svg class="pill-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
                     <rect x="4" y="8" width="16" height="12" rx="2"/>
                   </svg>
                   <span class="model-trigger-name" id="modelTriggerName">Gemini 3.8 Flash</span>
                   <span class="model-trigger-effort" id="modelTriggerEffort">高思考</span>
-                  <span class="model-trigger-mode" id="modelTriggerMode">自动执行</span>
                   <svg class="pill-arrow" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M6 9l6 6 6-6"/>
                   </svg>
@@ -291,36 +297,8 @@
                   <div class="model-sheet-header">
                     <div class="model-sheet-handle"></div>
                     <div class="model-sheet-title-row">
-                      <span class="model-sheet-title">智能体模型与执行设置</span>
+                      <span class="model-sheet-title">智能体模型与思考强度</span>
                       <button type="button" class="btn-icon-xs model-sheet-close" id="modelSheetCloseBtn" title="关闭">✕</button>
-                    </div>
-                  </div>
-
-                  <!-- Execution Mode Switcher inside modal -->
-                  <div class="modal-mode-section">
-                    <div class="mode-section-header">
-                      <span class="mode-section-label">执行规划模式</span>
-                      <span class="mode-section-hint">点击快速切换</span>
-                    </div>
-                    <div class="mode-segmented-grid" id="modeSegmentedGrid">
-                      <div class="mode-card-option active" data-mode="accept-edits" id="modeCardAccept">
-                        <div class="mode-card-header">
-                          <span class="mode-card-icon">⚡</span>
-                          <span class="mode-card-title">自动执行</span>
-                          <span class="mode-card-badge">推荐</span>
-                          <span class="mode-card-check">✓</span>
-                        </div>
-                        <div class="mode-card-desc">自主完成代码编写、重构与终端命令执行验证</div>
-                      </div>
-                      <div class="mode-card-option" data-mode="plan" id="modeCardPlan">
-                        <div class="mode-card-header">
-                          <span class="mode-card-icon">📋</span>
-                          <span class="mode-card-title">仅规划</span>
-                          <span class="mode-card-badge plan-badge">仅规划模式</span>
-                          <span class="mode-card-check">✓</span>
-                        </div>
-                        <div class="mode-card-desc">仅输出逻辑分析与实施规划，不修改文件</div>
-                      </div>
                     </div>
                   </div>
 
@@ -340,11 +318,6 @@
                 <!-- Backdrop for mobile bottom sheet -->
                 <div class="model-cascader-backdrop hidden" id="modelCascaderBackdrop"></div>
               </div>
-
-              <!-- Quick Execution Mode Toggle Chip (Mobile Friendly) -->
-              <button type="button" class="composer-chip-btn mobile-only-inline-flex" id="composerModeToggleBtn" title="点击切换执行模式：自动执行 / 仅规划">
-                <span id="composerModeText">⚡ 自动执行</span>
-              </button>
 
               <!-- Quick Account Selector & Switcher in Thumb Zone (Desktop only) -->
               <div class="bottom-pill-selector composer-account-pill desktop-only-inline-flex" id="composerAccountPill" title="当前 Google 账号 · 点击查看/切换">
@@ -753,6 +726,32 @@
             </div>
           </div>
         </div>
+        <!-- Section 6: 移动端应用 (Android App & PWA) -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <span class="sec-icon">📱</span>
+            <span>移动端应用 (Android App &amp; PWA)</span>
+          </div>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <div class="settings-row-name">Android 原生 APK 安装包</div>
+                <div class="settings-row-desc">内置服务器配置、拍照直传、沉浸式全屏与防误触退出</div>
+              </div>
+              <a href="/download/antigravity.apk" download="antigravity.apk" class="btn btn-sm btn-primary" id="downloadApkBtn" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+                ⬇️ 下载 APK
+              </a>
+            </div>
+            <div class="settings-divider"></div>
+            <div class="settings-row">
+              <div class="settings-row-text">
+                <div class="settings-row-name">PWA 渐进式应用 (即开即用)</div>
+                <div class="settings-row-desc">手机浏览器菜单点击「添加到主屏幕」，即可免安装以独立 App 运行</div>
+              </div>
+              <span class="badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;padding:4px 8px;border-radius:4px;font-size:12px;">已就绪</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="modal-footer settings-modal-footer">
@@ -780,6 +779,15 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <script src="/vendor/marked.min.js"></script>
-  <script src="/app.js?v=2.7"></script>
+  <script src="/app.js?v=2.9"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((reg) => console.log('[PWA] ServiceWorker registered with scope:', reg.scope))
+          .catch((err) => console.warn('[PWA] ServiceWorker registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>

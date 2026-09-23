@@ -102,6 +102,7 @@ const el = {
   newChatBtn: document.getElementById('newChatBtn'),
   historyList: document.getElementById('historyList'),
   refreshHistoryBtn: document.getElementById('refreshHistoryBtn'),
+  clearHistoryBtn: document.getElementById('clearHistoryBtn'),
   historyTabAll: document.getElementById('historyTabAll'),
   historyTabCurrent: document.getElementById('historyTabCurrent'),
   modelCascaderContainer: document.getElementById('modelCascaderContainer'),
@@ -135,6 +136,7 @@ const el = {
   navbarBreadcrumbs: document.getElementById('navbarBreadcrumbs') || document.querySelector('.navbar-breadcrumbs'),
   navWsPath: document.getElementById('navWsPath'),
   sessionTitle: document.getElementById('sessionTitle'),
+  deleteCurrentSessionBtn: document.getElementById('deleteCurrentSessionBtn'),
   chatContainer: document.getElementById('chatContainer'),
   welcomeView: document.getElementById('welcomeView'),
   welcomeWsBadge: document.getElementById('welcomeWsBadge'),
@@ -620,6 +622,72 @@ function setupEventListeners() {
 
   // Refresh History
   el.refreshHistoryBtn.addEventListener('click', () => loadConversations());
+
+  // Clear History
+  if (el.clearHistoryBtn) {
+    el.clearHistoryBtn.addEventListener('click', async () => {
+      const isCurrentWs = state.historyViewMode === 'current';
+      const curWsName = state.currentWorkspace?.name || state.currentWorkspace?.path || '当前工作区';
+      const targetText = isCurrentWs ? `【${curWsName}】下的所有` : '【全部工作区】的';
+      
+      const count = isCurrentWs ? 
+        state.conversations.filter(c => {
+          const curPath = state.currentWorkspace ? pathResolve(state.currentWorkspace.path) : '';
+          const curId = state.currentWorkspace ? state.currentWorkspace.id : '';
+          if (curPath && c.workspace_path && pathResolve(c.workspace_path) === curPath) return true;
+          if (curId && c.workspace_id === curId) return true;
+          return false;
+        }).length :
+        state.conversations.length;
+
+      if (count === 0) {
+        showToast('暂无历史会话可清空', 'info', 2000);
+        return;
+      }
+
+      if (!confirm(`⚠️ 危险操作：\n确定要清空 ${targetText} 历史会话吗？(共 ${count} 个)\n\n清空后所有历史记录和产物将被永久删除且不可恢复！`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/conversations', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clear_all: true,
+            workspace: isCurrentWs ? state.currentWorkspace?.path : null
+          })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || '清空失败');
+        }
+        const data = await res.json();
+        
+        if (state.currentConversationId) {
+          startNewChat();
+        }
+        
+        await loadConversations();
+        showToast(`已成功清空 ${data.count || count} 个历史会话`, 'success', 2500);
+      } catch (err) {
+        console.error('Clear history error:', err);
+        showToast(`清空历史失败: ${err.message}`, 'error', 3000);
+      }
+    });
+  }
+
+  // Delete Current Session Button in Top Navbar
+  if (el.deleteCurrentSessionBtn) {
+    el.deleteCurrentSessionBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!state.currentConversationId) return;
+      const titleDisplay = (el.sessionTitle?.textContent || '当前会话').slice(0, 30);
+      if (confirm(`确定要删除当前历史对话 "${titleDisplay}" 吗？\n删除后对话记录与产物将不可恢复。`)) {
+        await deleteConversation(state.currentConversationId);
+      }
+    });
+  }
 
   // History View Tabs (全部分类 / 当前工作区)
   if (el.historyTabAll) {
@@ -2285,15 +2353,63 @@ async function loadConversations(silent = false) {
   }
 }
 
+async function deleteConversation(convId) {
+  if (!convId) return;
+  try {
+    const res = await fetch(`/api/conversations/${encodeURIComponent(convId)}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || '删除失败');
+    }
+
+    // 1. Remove from state.conversations
+    state.conversations = state.conversations.filter(c => c.id !== convId);
+    state.runningSessionIds.delete(convId);
+
+    // 2. Remove DOM session container if exists
+    if (state.sessionContainers.has(convId)) {
+      const container = state.sessionContainers.get(convId);
+      container.remove();
+      state.sessionContainers.delete(convId);
+    }
+
+    // 3. If currently viewing this conversation, reset to new chat
+    if (state.currentConversationId === convId) {
+      startNewChat();
+    } else {
+      renderConversationsList();
+      updateGeneratingUI();
+    }
+
+    showToast('历史对话已删除', 'success', 2000);
+  } catch (err) {
+    console.error('Delete conversation error:', err);
+    showToast(`删除失败: ${err.message}`, 'error', 3000);
+  }
+}
+
 function createHistoryItemElement(c) {
   const isRunning = c.is_running || state.runningSessionIds.has(c.id);
   const isActive = state.currentConversationId === c.id;
   const item = document.createElement('div');
   item.className = 'history-item' + (isActive ? ' active' : '') + (isRunning ? ' is-running' : '');
+  item.dataset.convId = c.id;
   
   const timeStr = formatRelativeTime(c.updated_at || c.created_at);
   item.innerHTML = `
-    <span class="history-title" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</span>
+    <div class="history-item-header">
+      <span class="history-title" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</span>
+      <div class="history-item-actions">
+        <button type="button" class="history-delete-btn" title="删除此历史对话" aria-label="删除此历史对话">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
     <div class="history-meta-row">
       ${isRunning ? `
         <span class="history-status-badge status-running">
@@ -2307,6 +2423,18 @@ function createHistoryItemElement(c) {
       <span class="history-time">${timeStr}</span>
     </div>
   `;
+
+  // Delete button click handler
+  const deleteBtn = item.querySelector('.history-delete-btn');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const titleDisplay = (c.title || '此会话').slice(0, 30);
+      if (confirm(`确定要删除历史对话 "${titleDisplay}" 吗？\n删除后对话记录与产物将不可恢复。`)) {
+        await deleteConversation(c.id);
+      }
+    });
+  }
 
   item.addEventListener('click', () => {
     // If conversation belongs to another workspace, switch active workspace
@@ -2554,6 +2682,13 @@ function updateNavbarSessionTitle(title) {
   }
   if (el.sessionTitle) {
     el.sessionTitle.textContent = title || '新会话';
+  }
+  if (el.deleteCurrentSessionBtn) {
+    if (isNew) {
+      el.deleteCurrentSessionBtn.classList.add('hidden');
+    } else {
+      el.deleteCurrentSessionBtn.classList.remove('hidden');
+    }
   }
 }
 
@@ -2847,6 +2982,7 @@ function handleStreamEventForSession(session, event, data) {
       session.currentStreamMessage.statusBadgeEl.remove();
       session.currentStreamMessage.statusBadgeEl = null;
     }
+    const finalConvId = data.conversation_id || session.sessionId;
     if (data.conversation_id && session.sessionId !== data.conversation_id) {
       session.sessionId = data.conversation_id;
       state.sessionContainers.set(data.conversation_id, session.container);
@@ -2857,6 +2993,19 @@ function handleStreamEventForSession(session, event, data) {
       updateGeneratingUI();
     }
     loadConversations(true);
+
+    // 同步刷新会话，以便展示任务执行期间生成的图片附件与媒体文件
+    if (finalConvId && !finalConvId.startsWith('sess_')) {
+      fetch(`/api/conversations/${finalConvId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(convData => {
+          if (convData && Array.isArray(convData.messages) && session.container) {
+            renderConversationMessages(session.container, convData.messages);
+            if (state.currentConversationId === session.sessionId) scrollToBottom();
+          }
+        })
+        .catch(() => {});
+    }
   } else if (event === 'quota_exhausted') {
     session.statusText = '额度已耗尽，请快捷切换账号';
     if (state.currentConversationId === session.sessionId) {
@@ -3119,15 +3268,16 @@ function appendMessage(role, content, extra = {}, targetContainer = null) {
   }
 
   // Render attached files/images if any
-  if (extra.images && Array.isArray(extra.images) && extra.images.length > 0) {
-    innerHtml += `<div class="chat-images-grid">`;
+  const renderImagesHtml = () => {
+    if (!extra.images || !Array.isArray(extra.images) || extra.images.length === 0) return '';
+    let html = `<div class="chat-images-grid ${role === 'assistant' ? 'assistant-images-grid' : ''}">`;
     extra.images.forEach(img => {
       const isImg = img.is_image !== false && (!img.filename || img.filename.match(/\.(png|jpg|jpeg|webp|gif|svg)$/i));
       if (isImg) {
-        innerHtml += `<img src="${img.url}" alt="${escapeHtml(img.original_name || img.filename || 'image')}" class="chat-image-attachment" title="点击查看大图" onclick="window.open('${img.url}', '_blank')">`;
+        html += `<img src="${img.url}" alt="${escapeHtml(img.original_name || img.filename || 'image')}" class="chat-image-attachment" title="点击查看大图" onclick="window.open('${img.url}', '_blank')">`;
       } else {
         const isPdf = (img.filename || '').toLowerCase().endsWith('.pdf');
-        innerHtml += `
+        html += `
           <div class="chat-file-attachment" onclick="window.open('${img.url}', '_blank')" title="点击查看文件">
             <span class="file-icon">${isPdf ? '📕' : '📄'}</span>
             <div class="file-meta">
@@ -3138,12 +3288,18 @@ function appendMessage(role, content, extra = {}, targetContainer = null) {
         `;
       }
     });
-    innerHtml += `</div>`;
+    html += `</div>`;
+    return html;
+  };
+
+  if (role === 'user') {
+    innerHtml += renderImagesHtml();
   }
 
   const cleanText = (content || '').trim();
   if (role === 'assistant') {
     innerHtml += `<div class="response-text">${renderMarkdown(content)}</div>`;
+    innerHtml += renderImagesHtml();
   } else {
     innerHtml += `<div class="response-text">${escapeHtml(cleanText)}</div>`;
   }
@@ -3556,6 +3712,7 @@ function renderConversationMessages(container, messages) {
       appendMessage(msg.role, msg.content, {
         thinking: msg.thinking,
         tool_calls: msg.tool_calls,
+        images: msg.images,
         timestamp: msg.timestamp
       }, container);
     });
@@ -4019,14 +4176,39 @@ function setupMarked() {
     `;
   };
 
-  // Links: [text](url)
-  renderer.link = function(args) {
-    const href = typeof args === 'object' ? args.href : arguments[0];
+  // Images: ![alt](url)
+  renderer.image = function(args) {
+    let href = typeof args === 'object' ? args.href : arguments[0];
     const title = typeof args === 'object' ? args.title : arguments[1];
     const text = typeof args === 'object' ? args.text : arguments[2];
-    const isFile = href && href.startsWith('file://');
-    const icon = isFile ? '<span class="link-file-icon">📄</span> ' : '';
-    return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" class="md-link ${isFile ? 'md-file-link' : ''}" ${title ? `title="${escapeHtml(title)}"` : ''}>${icon}${text}</a>`;
+    let src = href || '';
+    if (src.startsWith('file://')) {
+      src = src.replace(/^file:\/\//, '');
+    }
+    if (src.startsWith('/') && !src.startsWith('/api/') && !src.startsWith('/uploads/') && !src.startsWith('/agyweb-uploads/')) {
+      if (src.startsWith('/opt/') || src.startsWith('/root/') || src.startsWith('/home/') || src.startsWith('/var/') || src.startsWith('/tmp/')) {
+        src = `/api/file-view?path=${encodeURIComponent(src)}`;
+      }
+    }
+    return `<div class="md-image-wrap"><img src="${escapeHtml(src)}" alt="${escapeHtml(text || '')}" ${title ? `title="${escapeHtml(title)}"` : ''} class="md-inline-image" loading="lazy" onclick="window.open('${escapeHtml(src)}', '_blank')"></div>`;
+  };
+
+  // Links: [text](url)
+  renderer.link = function(args) {
+    let href = typeof args === 'object' ? args.href : arguments[0];
+    const title = typeof args === 'object' ? args.title : arguments[1];
+    const text = typeof args === 'object' ? args.text : arguments[2];
+    const isFile = href && (href.startsWith('file://') || href.startsWith('/root/') || href.startsWith('/opt/') || href.startsWith('/home/'));
+    let linkUrl = href;
+    if (href && href.startsWith('file://')) {
+      const cleanPath = href.replace(/^file:\/\//, '');
+      linkUrl = `/api/file-view?path=${encodeURIComponent(cleanPath)}`;
+    } else if (href && (href.startsWith('/root/') || href.startsWith('/opt/') || href.startsWith('/home/'))) {
+      linkUrl = `/api/file-view?path=${encodeURIComponent(href)}`;
+    }
+    const isImg = (href || '').match(/\.(png|jpg|jpeg|webp|gif|svg)(\?.*)?$/i);
+    const icon = isImg ? '🖼️ ' : (isFile ? '<span class="link-file-icon">📄</span> ' : '');
+    return `<a href="${escapeHtml(linkUrl)}" target="_blank" rel="noopener noreferrer" class="md-link ${isFile ? 'md-file-link' : ''}" ${title ? `title="${escapeHtml(title)}"` : ''}>${icon}${text}</a>`;
   };
 
   // Blockquotes & GitHub Alerts
@@ -4104,6 +4286,18 @@ function renderMarkdown(md) {
 
   // Horizontal rules
   html = html.replace(/^---$/gim, '<hr class="markdown-hr">');
+
+  // Images: ![alt](url)
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, src) => {
+    let realSrc = (src || '').trim();
+    if (realSrc.startsWith('file://')) realSrc = realSrc.replace(/^file:\/\//, '');
+    if (realSrc.startsWith('/') && !realSrc.startsWith('/api/') && !realSrc.startsWith('/uploads/') && !realSrc.startsWith('/agyweb-uploads/')) {
+      if (realSrc.startsWith('/opt/') || realSrc.startsWith('/root/') || realSrc.startsWith('/home/') || realSrc.startsWith('/var/') || realSrc.startsWith('/tmp/')) {
+        realSrc = `/api/file-view?path=${encodeURIComponent(realSrc)}`;
+      }
+    }
+    return `<div class="md-image-wrap"><img src="${escapeHtml(realSrc)}" alt="${escapeHtml(alt || '')}" class="md-inline-image" loading="lazy" onclick="window.open('${escapeHtml(realSrc)}', '_blank')"></div>`;
+  });
 
   // Links: [text](url)
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="md-link">$1</a>');

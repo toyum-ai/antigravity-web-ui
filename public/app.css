@@ -478,11 +478,101 @@ html, body {
   background-color: rgba(16, 185, 129, 0.06);
 }
 
+.history-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+#clearHistoryBtn:hover {
+  color: #ef4444;
+}
+
 .history-item-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  gap: 6px;
+}
+
+.history-item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.history-item:hover .history-item-actions,
+.history-item:focus-within .history-item-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (max-width: 768px), (hover: none) {
+  .history-item-actions {
+    opacity: 0.65;
+    pointer-events: auto;
+  }
+}
+
+.history-delete-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 3px;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.history-delete-btn:hover {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.12);
+}
+
+.delete-current-session-btn {
+  background: transparent;
+  border: none;
+  padding: 3px;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  margin-left: 4px;
+}
+
+.delete-current-session-btn:hover {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.12);
+}
+
+.btn-icon-xs {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-sm, 4px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.btn-icon-xs:hover {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.12);
 }
 
 .history-title {
@@ -944,6 +1034,14 @@ html, body {
 .btn-auth-pill:hover {
   color: var(--success);
   border-color: var(--success);
+}
+
+/* User requested to hide from top navbar */
+#accountManagerBtn,
+#navQuickSwitchBestBtn,
+#copyUrlBtn,
+#authBtn {
+  display: none !important;
 }
 
 /* Chat Scroll Container */
@@ -1907,6 +2005,40 @@ html, body {
 .chat-image-attachment:hover {
   transform: scale(1.02);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.assistant-images-grid {
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+
+.assistant-images-grid .chat-image-attachment {
+  max-width: 320px;
+  max-height: 280px;
+}
+
+.md-image-wrap {
+  margin: 10px 0;
+  display: block;
+}
+
+.md-inline-image,
+.response-text img {
+  max-width: 100%;
+  max-height: 480px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  object-fit: contain;
+  background-color: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  display: block;
+}
+
+.md-inline-image:hover,
+.response-text img:hover {
+  transform: scale(1.01);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
 }
 
 .chat-file-attachment {

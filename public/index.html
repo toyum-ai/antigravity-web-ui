@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Antigravity">
   <link rel="apple-touch-icon" href="/apple_touch_icon.png">
-  <link rel="stylesheet" href="/app.css?v=3.1">
+  <link rel="stylesheet" href="/app.css?v=3.2">
 </head>
 <body>
   <div class="app-layout">
@@ -84,9 +84,17 @@
               <button class="history-tab-btn" id="historyTabCurrent" title="仅查看当前工作区的历史会话">当前工作区</button>
             </div>
           </div>
-          <button class="btn-icon-sm" id="refreshHistoryBtn" title="刷新历史">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-          </button>
+          <div class="history-header-actions">
+            <button class="btn-icon-sm" id="clearHistoryBtn" title="清空历史会话">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+            <button class="btn-icon-sm" id="refreshHistoryBtn" title="刷新历史">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+          </div>
         </div>
         <div class="history-list" id="historyList">
           <div class="loading-state">加载历史中...</div>
@@ -140,6 +148,12 @@
             <span class="nav-breadcrumb-divider">/</span>
             <div class="session-title-wrap">
               <h1 class="session-title" id="sessionTitle">新会话</h1>
+              <button type="button" class="btn-icon-xs delete-current-session-btn hidden" id="deleteCurrentSessionBtn" title="删除此历史会话">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -160,15 +174,15 @@
             <span>新会话</span>
           </button>
 
-          <!-- Desktop: Google Account Pill -->
-          <button class="btn-pill btn-account-pill desktop-only-inline-flex" id="accountManagerBtn" title="当前 Google 账号与额度 · 点击管理/切换">
+          <!-- Desktop: Google Account Pill (Hidden per user request) -->
+          <button class="btn-pill btn-account-pill hidden" id="accountManagerBtn" title="当前 Google 账号与额度 · 点击管理/切换" style="display: none !important;">
             <span class="account-pill-icon">👤</span>
             <span class="account-pill-email" id="navAccountEmail">账号加载中...</span>
             <span class="account-quota-badge" id="navAccountQuota">--</span>
           </button>
 
-          <!-- Desktop: Quick Switch to Best Account (1-Tap) -->
-          <button class="btn-pill btn-quick-switch desktop-only-inline-flex" id="navQuickSwitchBestBtn" title="⚡ 一键切换至配额最高可用账号">
+          <!-- Desktop: Quick Switch to Best Account (1-Tap) (Hidden per user request) -->
+          <button class="btn-pill btn-quick-switch hidden" id="navQuickSwitchBestBtn" title="⚡ 一键切换至配额最高可用账号" style="display: none !important;">
             <span class="quick-switch-icon">⚡</span>
             <span class="quick-switch-text">切最佳</span>
           </button>
@@ -197,14 +211,14 @@
             <span class="settings-pill-text desktop-only-inline">设置</span>
           </button>
 
-          <!-- Quick IP Copy (Desktop only) -->
-          <button class="btn-pill btn-lan-pill desktop-only-inline-flex" id="copyUrlBtn" title="点击复制局域网访问地址">
+          <!-- Quick IP Copy (Hidden per user request) -->
+          <button class="btn-pill btn-lan-pill hidden" id="copyUrlBtn" title="点击复制局域网访问地址" style="display: none !important;">
             <span class="status-dot online"></span>
             <span id="navLanUrl">局域网地址</span>
           </button>
 
-          <!-- Auth Status / Lock Button (Desktop only) -->
-          <button class="btn-pill btn-auth-pill desktop-only-inline-flex" id="authBtn" title="访问密钥管理 / 点击锁定">
+          <!-- Auth Status / Lock Button (Hidden per user request) -->
+          <button class="btn-pill btn-auth-pill hidden" id="authBtn" title="访问密钥管理 / 点击锁定" style="display: none !important;">
             <span id="authIcon">🔒</span>
             <span id="authStatusText">已授权</span>
           </button>

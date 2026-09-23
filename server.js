@@ -62,6 +62,20 @@ function saveConversationWorkspace(convId, wsPath) {
   }
 }
 
+function deleteConversationWorkspace(convId) {
+  if (!convId) return;
+  if (conversationWorkspacesMap.has(convId)) {
+    conversationWorkspacesMap.delete(convId);
+    try {
+      const obj = Object.fromEntries(conversationWorkspacesMap);
+      fs.mkdirSync(path.dirname(CONV_WORKSPACES_FILE), { recursive: true });
+      fs.writeFileSync(CONV_WORKSPACES_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('Error saving conversation workspaces on delete:', e);
+    }
+  }
+}
+
 // Authentication Configuration
 let AUTH_CONFIG = {
   enabled: true,
@@ -439,6 +453,58 @@ function classifyWorkspaceInfo(wsPath, registeredList) {
   };
 }
 
+// Helper: Delete single conversation completely
+function deleteSingleConversation(convId) {
+  if (!convId || typeof convId !== 'string') return false;
+  convId = convId.trim();
+  if (!convId || convId.includes('..') || convId.includes('/') || convId.includes('\\')) {
+    return false;
+  }
+
+  // 1. If agent process is running, terminate it
+  if (activeProcesses.has(convId) || runningConversationsMeta.has(convId)) {
+    const child = activeProcesses.get(convId);
+    if (child) {
+      try {
+        child.kill('SIGTERM');
+        setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch (e) {}
+        }, 1000);
+      } catch (e) {}
+    }
+    activeProcesses.delete(convId);
+    runningConversationsMeta.delete(convId);
+  }
+
+  // 2. Remove brain folder
+  const convDir = path.join(BRAIN_DIR, convId);
+  if (fs.existsSync(convDir)) {
+    try {
+      fs.rmSync(convDir, { recursive: true, force: true });
+    } catch (err) {
+      console.error(`Error deleting brain dir for ${convId}:`, err);
+    }
+  }
+
+  // 3. Remove from SQLite conversation_summaries.db
+  try {
+    const dbPath = path.join(os.homedir(), '.gemini', 'antigravity-cli', 'conversation_summaries.db');
+    if (fs.existsSync(dbPath)) {
+      const { DatabaseSync } = require('node:sqlite');
+      const db = new DatabaseSync(dbPath);
+      db.prepare('DELETE FROM conversation_summaries WHERE conversation_id = ?').run(convId);
+      db.close();
+    }
+  } catch (err) {
+    // Graceful fallback if SQLite is locked or unavailable
+  }
+
+  // 4. Remove from workspace mapping
+  deleteConversationWorkspace(convId);
+
+  return true;
+}
+
 // Helper: Parse JSON body
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -519,6 +585,34 @@ function serveStatic(req, res, pathname, parsedUrl) {
     }
   }
 
+  // Serve agyweb-uploads: /agyweb-uploads/*
+  if (pathname.startsWith('/agyweb-uploads/')) {
+    const filename = path.basename(pathname);
+    const candidateDirs = [
+      path.join(__dirname, 'agyweb-uploads'),
+      path.join(__dirname, 'data', 'agyweb-uploads'),
+      path.join(DEFAULT_WORKSPACE, 'agyweb-uploads')
+    ];
+    let foundUploadPath = null;
+    for (const d of candidateDirs) {
+      const p = path.join(d, filename);
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+        foundUploadPath = p;
+        break;
+      }
+    }
+    if (foundUploadPath) {
+      const ext = path.extname(foundUploadPath).toLowerCase();
+      const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+      res.writeHead(200, {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=86400'
+      });
+      fs.createReadStream(foundUploadPath).pipe(res);
+      return;
+    }
+  }
+
   let safePath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
   if (safePath === '/' || safePath === '') safePath = '/index.html';
   
@@ -531,6 +625,11 @@ function serveStatic(req, res, pathname, parsedUrl) {
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
+      if (safePath.startsWith('/download/')) {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('文件不存在或尚未生成');
+        return;
+      }
       // SPA Fallback to index.html
       const fallbackPath = path.join(PUBLIC_DIR, 'index.html');
       if (fs.existsSync(fallbackPath)) {
@@ -545,11 +644,15 @@ function serveStatic(req, res, pathname, parsedUrl) {
 
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-    res.writeHead(200, {
+    const headers = {
       'Content-Type': contentType,
       'Content-Length': stats.size,
       'Cache-Control': 'no-cache'
-    });
+    };
+    if (ext === '.apk') {
+      headers['Content-Disposition'] = `attachment; filename="${path.basename(filePath)}"`;
+    }
+    res.writeHead(200, headers);
     fs.createReadStream(filePath).pipe(res);
   });
 }
@@ -1051,12 +1154,14 @@ const server = http.createServer(async (req, res) => {
           if (!currentAssistant) return;
           const trimmedContent = (currentAssistant.content || '').trim();
           const trimmedThinking = (currentAssistant.thinking || '').trim();
-          if (trimmedContent || trimmedThinking) {
+          const images = currentAssistant.images || [];
+          if (trimmedContent || trimmedThinking || images.length > 0) {
             messages.push({
               id: currentAssistant.id,
               role: 'assistant',
               content: trimmedContent,
               thinking: trimmedThinking,
+              images: images,
               timestamp: currentAssistant.timestamp
             });
           }
@@ -1068,10 +1173,27 @@ const server = http.createServer(async (req, res) => {
             const row = JSON.parse(line);
             if (row.type === 'USER_INPUT') {
               commitAssistant();
+              const userContent = cleanUserPrompt(row.content);
+              const userImages = [];
+              const pathMatches = userContent.match(/(?:file:\/\/)?(\/[^\s\n"']+\.(?:png|jpg|jpeg|webp|gif|svg))/gi);
+              if (pathMatches) {
+                for (const p of pathMatches) {
+                  let cleanP = p.replace(/^file:\/\//, '');
+                  if (fs.existsSync(cleanP)) {
+                    userImages.push({
+                      filename: path.basename(cleanP),
+                      server_path: cleanP,
+                      url: `/api/file-view?path=${encodeURIComponent(cleanP)}`,
+                      is_image: true
+                    });
+                  }
+                }
+              }
               messages.push({
                 id: `step_${row.step_index}`,
                 role: 'user',
-                content: cleanUserPrompt(row.content),
+                content: userContent,
+                images: userImages,
                 timestamp: row.created_at
               });
             } else if (row.type === 'PLANNER_RESPONSE') {
@@ -1081,6 +1203,7 @@ const server = http.createServer(async (req, res) => {
                   role: 'assistant',
                   content: '',
                   thinking: '',
+                  images: [],
                   timestamp: row.created_at
                 };
               }
@@ -1102,6 +1225,60 @@ const server = http.createServer(async (req, res) => {
                 currentAssistant.timestamp = row.created_at;
               }
             }
+
+            // Also capture any media or generated images from any step (GENERIC, PLANNER_RESPONSE, etc.)
+            const mediaList = row.media || (row.step_update && row.step_update.media);
+            if (Array.isArray(mediaList) && mediaList.length > 0) {
+              if (!currentAssistant) {
+                currentAssistant = {
+                  id: `step_${row.step_index}`,
+                  role: 'assistant',
+                  content: '',
+                  thinking: '',
+                  images: [],
+                  timestamp: row.created_at
+                };
+              }
+              if (!currentAssistant.images) currentAssistant.images = [];
+              for (const m of mediaList) {
+                let p = m.uri || m.path || '';
+                if (p.startsWith('file://')) p = p.replace(/^file:\/\//, '');
+                if (p && !currentAssistant.images.some(img => img.server_path === p)) {
+                  currentAssistant.images.push({
+                    filename: path.basename(p),
+                    server_path: p,
+                    url: `/api/file-view?path=${encodeURIComponent(p)}`,
+                    is_image: true
+                  });
+                }
+              }
+            }
+
+            if (row.content && typeof row.content === 'string') {
+              const match = row.content.match(/Generated image is saved at\s+([^\s\n"']+\.(?:png|jpg|jpeg|webp|gif))/i);
+              if (match && match[1]) {
+                let imgPath = match[1].replace(/[.,;:!?]+$/, '').replace(/^file:\/\//, '');
+                if (!currentAssistant) {
+                  currentAssistant = {
+                    id: `step_${row.step_index}`,
+                    role: 'assistant',
+                    content: '',
+                    thinking: '',
+                    images: [],
+                    timestamp: row.created_at
+                  };
+                }
+                if (!currentAssistant.images) currentAssistant.images = [];
+                if (!currentAssistant.images.some(img => img.server_path === imgPath)) {
+                  currentAssistant.images.push({
+                    filename: path.basename(imgPath),
+                    server_path: imgPath,
+                    url: `/api/file-view?path=${encodeURIComponent(imgPath)}`,
+                    is_image: true
+                  });
+                }
+              }
+            }
           } catch (e) {}
         }
         commitAssistant();
@@ -1116,6 +1293,71 @@ const server = http.createServer(async (req, res) => {
       } catch (err) {
         return sendJson(res, 500, { error: err.message });
       }
+    }
+
+    // 8.5. API: Delete Conversation(s)
+    if ((pathname === '/api/conversations' && req.method === 'DELETE') ||
+        (pathname.startsWith('/api/conversations/') && req.method === 'DELETE')) {
+      let convId = '';
+      if (pathname.startsWith('/api/conversations/')) {
+        convId = pathname.replace('/api/conversations/', '').trim();
+      }
+
+      let body = {};
+      try {
+        body = await parseJsonBody(req);
+      } catch (e) {}
+
+      if (!convId && body.conversation_id) {
+        convId = String(body.conversation_id).trim();
+      }
+      if (!convId && body.id) {
+        convId = String(body.id).trim();
+      }
+
+      // Batch delete by IDs
+      if (Array.isArray(body.ids) && body.ids.length > 0) {
+        let deletedCount = 0;
+        for (const id of body.ids) {
+          if (deleteSingleConversation(String(id).trim())) {
+            deletedCount++;
+          }
+        }
+        return sendJson(res, 200, { success: true, count: deletedCount });
+      }
+
+      // Batch clear all conversations for a workspace or completely
+      if (body.clear_all === true) {
+        const filterWs = (body.workspace || '').trim();
+        const dbMap = getSummariesDbMap();
+        let deletedCount = 0;
+        if (fs.existsSync(BRAIN_DIR)) {
+          const dirs = fs.readdirSync(BRAIN_DIR);
+          for (const dir of dirs) {
+            if (filterWs) {
+              const transcriptPath = path.join(BRAIN_DIR, dir, '.system_generated', 'logs', 'transcript.jsonl');
+              const wsPath = resolveConvWorkspacePath(dir, transcriptPath, dbMap);
+              if (wsPath && path.resolve(wsPath) === path.resolve(filterWs)) {
+                if (deleteSingleConversation(dir)) deletedCount++;
+              }
+            } else {
+              if (deleteSingleConversation(dir)) deletedCount++;
+            }
+          }
+        }
+        return sendJson(res, 200, { success: true, count: deletedCount });
+      }
+
+      if (!convId) {
+        return sendJson(res, 400, { error: 'conversation_id required' });
+      }
+
+      const success = deleteSingleConversation(convId);
+      if (!success) {
+        return sendJson(res, 400, { error: 'Invalid conversation id or failed to delete' });
+      }
+
+      return sendJson(res, 200, { success: true, conversation_id: convId });
     }
 
     // 9. API: Stop Agent Execution

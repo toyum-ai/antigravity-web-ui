@@ -575,6 +575,109 @@ html, body {
   background-color: rgba(239, 68, 68, 0.12);
 }
 
+#batchManageHistoryBtn.active {
+  color: var(--primary);
+  background-color: rgba(59, 130, 246, 0.14);
+}
+
+.history-batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.batch-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.batch-select-all-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  color: var(--text-main);
+  user-select: none;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.batch-checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.batch-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-xs {
+  padding: 2.5px 7px;
+  font-size: 11px;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.btn-danger {
+  background-color: var(--danger, #ef4444);
+  color: #fff;
+  border: 1px solid var(--danger, #ef4444);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #dc2626;
+  border-color: #dc2626;
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.history-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item-checkbox {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.history-item.in-batch-mode {
+  user-select: none;
+}
+
+.history-item.is-selected {
+  background-color: rgba(59, 130, 246, 0.09) !important;
+  border-left-color: var(--primary) !important;
+}
+
 .history-title {
   font-size: 12px;
   color: var(--text-main);

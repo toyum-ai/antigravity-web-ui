@@ -81,7 +81,9 @@ const state = {
   accountSearchTerm: '',
   accountFilter: 'all',
   bestAccountInfo: null,
-  isSwitchingAccount: false
+  isSwitchingAccount: false,
+  isBatchMode: false,
+  selectedConvIds: new Set()
 };
 
 // DOM Elements
@@ -103,6 +105,12 @@ const el = {
   historyList: document.getElementById('historyList'),
   refreshHistoryBtn: document.getElementById('refreshHistoryBtn'),
   clearHistoryBtn: document.getElementById('clearHistoryBtn'),
+  batchManageHistoryBtn: document.getElementById('batchManageHistoryBtn'),
+  historyBatchBar: document.getElementById('historyBatchBar'),
+  batchSelectAllCheckbox: document.getElementById('batchSelectAllCheckbox'),
+  batchSelectedCountText: document.getElementById('batchSelectedCountText'),
+  batchDeleteConfirmBtn: document.getElementById('batchDeleteConfirmBtn'),
+  batchCancelBtn: document.getElementById('batchCancelBtn'),
   historyTabAll: document.getElementById('historyTabAll'),
   historyTabCurrent: document.getElementById('historyTabCurrent'),
   modelCascaderContainer: document.getElementById('modelCascaderContainer'),
@@ -686,6 +694,41 @@ function setupEventListeners() {
       if (confirm(`确定要删除当前历史对话 "${titleDisplay}" 吗？\n删除后对话记录与产物将不可恢复。`)) {
         await deleteConversation(state.currentConversationId);
       }
+    });
+  }
+
+  // Batch Management Toggle Button
+  if (el.batchManageHistoryBtn) {
+    el.batchManageHistoryBtn.addEventListener('click', () => {
+      toggleBatchMode();
+    });
+  }
+
+  // Batch Select All Checkbox
+  if (el.batchSelectAllCheckbox) {
+    el.batchSelectAllCheckbox.addEventListener('change', () => {
+      const visible = getVisibleConversations();
+      if (el.batchSelectAllCheckbox.checked) {
+        visible.forEach(c => state.selectedConvIds.add(c.id));
+      } else {
+        visible.forEach(c => state.selectedConvIds.delete(c.id));
+      }
+      updateBatchUI();
+      renderConversationsList();
+    });
+  }
+
+  // Batch Delete Confirm Button
+  if (el.batchDeleteConfirmBtn) {
+    el.batchDeleteConfirmBtn.addEventListener('click', () => {
+      deleteBatchConversations();
+    });
+  }
+
+  // Batch Cancel / Done Button
+  if (el.batchCancelBtn) {
+    el.batchCancelBtn.addEventListener('click', () => {
+      toggleBatchMode(false);
     });
   }
 
@@ -2390,18 +2433,119 @@ async function deleteConversation(convId) {
   }
 }
 
+function getVisibleConversations() {
+  if (state.historyViewMode === 'current') {
+    const curPath = state.currentWorkspace ? pathResolve(state.currentWorkspace.path) : '';
+    const curId = state.currentWorkspace ? state.currentWorkspace.id : '';
+    return state.conversations.filter(c => {
+      if (curPath && c.workspace_path && pathResolve(c.workspace_path) === curPath) return true;
+      if (curId && c.workspace_id === curId) return true;
+      return false;
+    });
+  }
+  return state.conversations;
+}
+
+function toggleBatchMode(forceState) {
+  state.isBatchMode = typeof forceState === 'boolean' ? forceState : !state.isBatchMode;
+  if (!state.isBatchMode) {
+    state.selectedConvIds.clear();
+  }
+  if (el.historyBatchBar) {
+    el.historyBatchBar.classList.toggle('hidden', !state.isBatchMode);
+  }
+  if (el.batchManageHistoryBtn) {
+    el.batchManageHistoryBtn.classList.toggle('active', state.isBatchMode);
+  }
+  updateBatchUI();
+  renderConversationsList();
+}
+
+function updateBatchUI() {
+  if (!state.isBatchMode) return;
+  const count = state.selectedConvIds.size;
+  if (el.batchSelectedCountText) {
+    el.batchSelectedCountText.textContent = `已选 ${count} 项`;
+  }
+  if (el.batchDeleteConfirmBtn) {
+    el.batchDeleteConfirmBtn.disabled = count === 0;
+    el.batchDeleteConfirmBtn.textContent = count > 0 ? `删除 (${count})` : '删除';
+  }
+
+  const visible = getVisibleConversations();
+  const allSelected = visible.length > 0 && visible.every(c => state.selectedConvIds.has(c.id));
+  const someSelected = visible.some(c => state.selectedConvIds.has(c.id));
+  if (el.batchSelectAllCheckbox) {
+    el.batchSelectAllCheckbox.checked = allSelected;
+    el.batchSelectAllCheckbox.indeterminate = !allSelected && someSelected;
+  }
+}
+
+async function deleteBatchConversations() {
+  const ids = Array.from(state.selectedConvIds);
+  if (ids.length === 0) return;
+
+  if (!confirm(`确定要批量删除已选中的 ${ids.length} 个历史会话吗？\n删除后会话记录与产物将不可恢复。`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/conversations', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || '批量删除失败');
+    }
+    const data = await res.json();
+
+    const idSet = new Set(ids);
+    state.conversations = state.conversations.filter(c => !idSet.has(c.id));
+    ids.forEach(id => {
+      state.runningSessionIds.delete(id);
+      if (state.sessionContainers.has(id)) {
+        state.sessionContainers.get(id).remove();
+        state.sessionContainers.delete(id);
+      }
+    });
+
+    if (state.currentConversationId && idSet.has(state.currentConversationId)) {
+      startNewChat();
+    }
+
+    state.selectedConvIds.clear();
+    toggleBatchMode(false);
+    showToast(`已成功删除 ${data.count || ids.length} 个历史会话`, 'success', 2500);
+  } catch (err) {
+    console.error('Batch delete error:', err);
+    showToast(`批量删除失败: ${err.message}`, 'error', 3000);
+  }
+}
+
 function createHistoryItemElement(c) {
   const isRunning = c.is_running || state.runningSessionIds.has(c.id);
   const isActive = state.currentConversationId === c.id;
+  const isSelected = state.selectedConvIds.has(c.id);
+  const isBatchMode = state.isBatchMode;
+
   const item = document.createElement('div');
-  item.className = 'history-item' + (isActive ? ' active' : '') + (isRunning ? ' is-running' : '');
+  item.className = 'history-item' + 
+    (isActive ? ' active' : '') + 
+    (isRunning ? ' is-running' : '') +
+    (isSelected ? ' is-selected' : '') +
+    (isBatchMode ? ' in-batch-mode' : '');
   item.dataset.convId = c.id;
   
   const timeStr = formatRelativeTime(c.updated_at || c.created_at);
   item.innerHTML = `
     <div class="history-item-header">
-      <span class="history-title" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</span>
-      <div class="history-item-actions">
+      <div class="history-title-wrap">
+        <input type="checkbox" class="history-item-checkbox ${isBatchMode ? '' : 'hidden'}" ${isSelected ? 'checked' : ''} tabindex="-1">
+        <span class="history-title" title="${escapeHtml(c.title)}">${escapeHtml(c.title)}</span>
+      </div>
+      <div class="history-item-actions ${isBatchMode ? 'hidden' : ''}">
         <button type="button" class="history-delete-btn" title="删除此历史对话" aria-label="删除此历史对话">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 6 5 6 21 6"></polyline>
@@ -2436,7 +2580,21 @@ function createHistoryItemElement(c) {
     });
   }
 
-  item.addEventListener('click', () => {
+  item.addEventListener('click', (e) => {
+    if (state.isBatchMode) {
+      e.preventDefault();
+      if (state.selectedConvIds.has(c.id)) {
+        state.selectedConvIds.delete(c.id);
+      } else {
+        state.selectedConvIds.add(c.id);
+      }
+      item.classList.toggle('is-selected', state.selectedConvIds.has(c.id));
+      const chk = item.querySelector('.history-item-checkbox');
+      if (chk) chk.checked = state.selectedConvIds.has(c.id);
+      updateBatchUI();
+      return;
+    }
+
     // If conversation belongs to another workspace, switch active workspace
     if (c.workspace_path && state.currentWorkspace && pathResolve(state.currentWorkspace.path) !== pathResolve(c.workspace_path)) {
       const match = state.workspaces.find(w => pathResolve(w.path) === pathResolve(c.workspace_path));

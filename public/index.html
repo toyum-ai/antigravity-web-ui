@@ -85,6 +85,12 @@
             </div>
           </div>
           <div class="history-header-actions">
+            <button class="btn-icon-sm" id="batchManageHistoryBtn" title="批量管理与多选删除">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 11 12 14 22 4"></polyline>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+              </svg>
+            </button>
             <button class="btn-icon-sm" id="clearHistoryBtn" title="清空历史会话">
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
@@ -94,6 +100,19 @@
             <button class="btn-icon-sm" id="refreshHistoryBtn" title="刷新历史">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
             </button>
+          </div>
+        </div>
+        <!-- Batch Action Toolbar (多选删除工具栏) -->
+        <div class="history-batch-bar hidden" id="historyBatchBar">
+          <div class="batch-bar-left">
+            <label class="batch-select-all-label" title="全选/取消全选">
+              <input type="checkbox" id="batchSelectAllCheckbox" class="batch-checkbox">
+              <span id="batchSelectedCountText">已选 0 项</span>
+            </label>
+          </div>
+          <div class="batch-bar-right">
+            <button type="button" class="btn-xs btn-danger" id="batchDeleteConfirmBtn" disabled>删除</button>
+            <button type="button" class="btn-xs btn-secondary" id="batchCancelBtn">完成</button>
           </div>
         </div>
         <div class="history-list" id="historyList">
